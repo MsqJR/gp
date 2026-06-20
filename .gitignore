@@ -71,6 +71,7 @@ __pycache__/
 *$py.class
 .Python
 
+/myenv
 /backend/env/
 /backend/venv/
 /backend/ENV/

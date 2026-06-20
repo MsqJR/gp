@@ -1,2 +1,0 @@
-- [ ] Implement Repository pattern
-- [ ] `` strategy pattern
