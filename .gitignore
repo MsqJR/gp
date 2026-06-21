@@ -89,3 +89,14 @@ __pycache__/
 ####################
 frontend/package-lock.json
 backend/collection.json
+
+
+
+
+
+
+backend/.specify
+backend/.opencode
+backend/.agents
+backend/newfile.md
+backend/specs/

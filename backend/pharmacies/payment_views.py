@@ -1,5 +1,4 @@
 import hashlib
-import json
 import logging
 
 import stripe
@@ -130,7 +129,6 @@ def fawry_create_code(request):
         return Response({'error': 'Website setup not found.'}, status=status.HTTP_404_NOT_FOUND)
 
     merchant_code = settings.FAWRY_MERCHANT_CODE
-    secure_key = settings.FAWRY_SECURE_KEY
     merchant_ref = f"txn_{website_setup.id}_{PaymentTransaction.objects.count() + 1}"
 
     import requests as http_requests
@@ -193,7 +191,8 @@ def fawry_webhook(request):
     raw = merchant_code + merchant_ref + fawry_ref + order_status + amount + secure_key
     expected_signature = hashlib.sha256(raw.encode('utf-8')).hexdigest()
 
-    if received_signature != expected_signature:
+    from django.utils.crypto import constant_time_compare
+    if not constant_time_compare(received_signature, expected_signature):
         logger.warning('Fawry webhook signature mismatch for ref: %s', merchant_ref)
         return Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
 

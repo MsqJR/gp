@@ -2,7 +2,6 @@ from unittest.mock import patch
 from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
-from rest_framework_simplejwt.tokens import RefreshToken
 from core.models import User
 
 

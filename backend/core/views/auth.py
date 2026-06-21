@@ -314,27 +314,29 @@ def google_login(request):
         return Response({'error': 'Email not provided by Google.'}, status=status.HTTP_400_BAD_REQUEST)
 
     user_model = get_user_model()
-    user = user_model.objects.filter(email__iexact=email).first()
+    user = user_model.objects.filter(google_oauth_id=google_sub).first()
 
-    if user:
-        user.google_oauth_id = google_sub
-        user.save(update_fields=['google_oauth_id', 'updated_at'])
-    else:
-        username = email.split('@')[0]
-        base_username = username
-        counter = 1
-        while user_model.objects.filter(username=username).exists():
-            username = f"{base_username}{counter}"
-            counter += 1
+    if not user:
+        user = user_model.objects.filter(email__iexact=email).first()
+        if user:
+            user.google_oauth_id = google_sub
+            user.save(update_fields=['google_oauth_id', 'updated_at'])
+        else:
+            username = email.split('@')[0]
+            base_username = username
+            counter = 1
+            while user_model.objects.filter(username=username).exists():
+                username = f"{base_username}{counter}"
+                counter += 1
 
-        user = user_model.objects.create_user(
-            username=username,
-            email=email,
-            name=name or email.split('@')[0],
-            google_oauth_id=google_sub,
-            is_onboarding_completed=False,
-            business_type='',
-        )
+            user = user_model.objects.create_user(
+                username=username,
+                email=email,
+                name=name or email.split('@')[0],
+                google_oauth_id=google_sub,
+                is_onboarding_completed=False,
+                business_type='',
+            )
 
     refresh = RefreshToken.for_user(user)
     return Response({
