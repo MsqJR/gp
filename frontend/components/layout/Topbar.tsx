@@ -107,6 +107,13 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick }) => {
       userTypes: ['hospital'],
     },
     {
+      label: 'Departments',
+      description: 'Manage hospital departments',
+      href: '/dashboard/hospital/departments',
+      keywords: ['departments', 'specialties', 'units', 'clinical areas'],
+      userTypes: ['hospital'],
+    },
+    {
       label: 'Hospital Settings',
       description: 'Hospital branding and notifications',
       href: '/dashboard/hospital/settings',

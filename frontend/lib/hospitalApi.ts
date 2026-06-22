@@ -20,6 +20,7 @@ export async function getHospitalProfile(subdomain: string): Promise<HospitalPro
 }
 
 export interface HospitalBusinessInfo {
+    name?: string | null;
     contact_phone: string;
     contact_email: string;
     address: string;

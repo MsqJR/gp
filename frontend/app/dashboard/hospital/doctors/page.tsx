@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { hospitalAdminApi } from '@/lib/hospitalAdminApi';
@@ -24,6 +25,13 @@ interface DoctorFormData {
   image: File | null;
   image_url: string;
   imagePreview: string;
+  availabilityType: 'week' | 'month' | 'year';
+  weeklyDays: number[];
+  monthlyMonth: string;
+  monthlyDayNumbers: number[];
+  availabilityStartTime: string;
+  availabilityEndTime: string;
+  availabilitySlotDurationMinutes: number;
   availableDates: {
     date: string; // YYYY-MM-DD format
     start_time: string;
@@ -47,6 +55,13 @@ const EMPTY_FORM: DoctorFormData = {
   name: '', title: '', specialty: '', bio: '', email: '',
   experience: '', department: '', newDeptName: '', is_active: true,
   image: null, image_url: '', imagePreview: '',
+  availabilityType: 'week',
+  weeklyDays: [1, 2, 3, 4, 5],
+  monthlyMonth: new Date().toISOString().slice(0, 7),
+  monthlyDayNumbers: [],
+  availabilityStartTime: '09:00',
+  availabilityEndTime: '17:00',
+  availabilitySlotDurationMinutes: 30,
   availableDates: [],
 };
 
@@ -54,6 +69,24 @@ const EMPTY_FORM: DoctorFormData = {
 
 function initials(name: string) {
   return name.split(' ').slice(0, 2).map(t => t[0]?.toUpperCase() ?? '').join('');
+}
+
+const WEEKDAYS = [
+  { day: 1, label: 'Mon' },
+  { day: 2, label: 'Tue' },
+  { day: 3, label: 'Wed' },
+  { day: 4, label: 'Thu' },
+  { day: 5, label: 'Fri' },
+  { day: 6, label: 'Sat' },
+  { day: 0, label: 'Sun' },
+];
+
+function pad2(value: number) {
+  return String(value).padStart(2, '0');
+}
+
+function getDaysInMonth(year: number, month: number) {
+  return new Date(year, month, 0).getDate();
 }
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
@@ -69,6 +102,25 @@ function Field({ label, required, children }: { label: string; required?: boolea
 
 const INPUT = 'w-full px-3 py-2 border border-neutral-border rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none';
 
+function ModalPortal({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] overflow-y-auto bg-black/50 backdrop-blur-sm">
+      <div className="min-h-screen flex items-center justify-center p-4">
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 // ─── Doctor Form Modal ────────────────────────────────────────────────────────
 
 interface DoctorModalProps {
@@ -83,13 +135,234 @@ interface DoctorModalProps {
 
 function DoctorModal({ mode, initialData, departments, onClose, onSave, saving, error }: DoctorModalProps) {
   const [form, setForm] = useState<DoctorFormData>(initialData);
-  const set = (k: keyof DoctorFormData, v: string | boolean | File | null) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k: keyof DoctorFormData, v: string | number | boolean | File | null) => setForm(f => ({ ...f, [k]: v }));
   const imageInputRef = useRef<HTMLInputElement>(null);
   const previewUrl = form.imagePreview || form.image_url;
 
+  const toggleWeeklyDay = (day: number) => {
+    setForm(prev => {
+      const days = prev.weeklyDays.includes(day)
+        ? prev.weeklyDays.filter(d => d !== day)
+        : [...prev.weeklyDays, day].sort((a, b) => a - b);
+      return { ...prev, weeklyDays: days };
+    });
+  };
+
+  const toggleMonthlyDay = (day: number) => {
+    setForm(prev => {
+      const days = prev.monthlyDayNumbers.includes(day)
+        ? prev.monthlyDayNumbers.filter(d => d !== day)
+        : [...prev.monthlyDayNumbers, day].sort((a, b) => a - b);
+      return { ...prev, monthlyDayNumbers: days };
+    });
+  };
+
+  const renderAvailabilityInputs = () => {
+    if (form.availabilityType === 'week') {
+      return (
+        <>
+          <p className="text-sm text-neutral-gray mb-3">
+            Select which weekdays the doctor is available, then choose a daily time window.
+          </p>
+          <div className="grid grid-cols-4 gap-2 mb-3">
+            {WEEKDAYS.map(day => (
+              <button
+                key={day.day}
+                type="button"
+                onClick={() => toggleWeeklyDay(day.day)}
+                className={`rounded-xl border px-2 py-2 text-sm font-medium transition ${form.weeklyDays.includes(day.day)
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white text-neutral-dark border-neutral-border hover:border-neutral-border/80'
+                }`}
+              >
+                {day.label}
+              </button>
+            ))}
+          </div>
+        </>
+      );
+    }
+
+    if (form.availabilityType === 'month') {
+      const [year, month] = form.monthlyMonth.split('-').map(Number);
+      const daysInMonth = getDaysInMonth(year, month);
+      const dayButtons = Array.from({ length: Math.min(daysInMonth, 31) }, (_, idx) => idx + 1);
+      return (
+        <>
+          <p className="text-sm text-neutral-gray mb-3">
+            Choose the days of the month when the doctor is available, then set the time range.
+          </p>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-sm font-medium text-neutral-dark mb-1">Month</label>
+              <input
+                type="month"
+                value={form.monthlyMonth}
+                onChange={e => set('monthlyMonth', e.target.value)}
+                className="w-full px-3 py-2 border border-neutral-border rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-dark mb-1">Selected days</label>
+              <div className="text-sm text-neutral-gray">
+                {form.monthlyDayNumbers.length > 0 ? form.monthlyDayNumbers.join(', ') : 'None selected'}
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-2 mb-4 max-h-44 overflow-y-auto border border-neutral-border rounded-lg p-3 bg-white">
+            {dayButtons.map(day => (
+              <button
+                key={day}
+                type="button"
+                onClick={() => toggleMonthlyDay(day)}
+                className={`rounded-xl border px-2 py-2 text-xs font-medium transition ${form.monthlyDayNumbers.includes(day)
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-neutral-light text-neutral-dark border-neutral-border hover:border-neutral-border/80'
+                }`}
+              >
+                {day}
+              </button>
+            ))}
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <p className="text-sm text-neutral-gray mb-3">
+          Add specific dates for availability. Each selected date will be saved as a date-specific schedule.
+        </p>
+        <div className="bg-neutral-light/50 rounded-lg p-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+            <div>
+              <label className="block text-xs font-medium text-neutral-gray mb-1">Date</label>
+              <input
+                type="date"
+                id="new-date"
+                min={new Date().toISOString().split('T')[0]}
+                className="w-full px-2 py-1.5 border border-neutral-border rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-gray mb-1">Slot Duration</label>
+              <select
+                id="new-slot-duration"
+                defaultValue="30"
+                className="w-full px-2 py-1.5 border border-neutral-border rounded text-sm"
+              >
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="45">45 minutes</option>
+                <option value="60">60 minutes</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <div>
+              <label className="block text-xs font-medium text-neutral-gray mb-1">Start Time</label>
+              <input
+                type="time"
+                id="new-start-time"
+                defaultValue="09:00"
+                className="w-full px-2 py-1.5 border border-neutral-border rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-gray mb-1">End Time</label>
+              <input
+                type="time"
+                id="new-end-time"
+                defaultValue="17:00"
+                className="w-full px-2 py-1.5 border border-neutral-border rounded text-sm"
+              />
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              const dateInput = document.getElementById('new-date') as HTMLInputElement;
+              const startInput = document.getElementById('new-start-time') as HTMLInputElement;
+              const endInput = document.getElementById('new-end-time') as HTMLInputElement;
+              const slotInput = document.getElementById('new-slot-duration') as HTMLSelectElement;
+
+              if (!dateInput.value) {
+                alert('Please select a date');
+                return;
+              }
+
+              const newDate = {
+                date: dateInput.value,
+                start_time: startInput.value,
+                end_time: endInput.value,
+                slot_duration_minutes: Number(slotInput.value),
+              };
+
+              if (form.availableDates.some(d => d.date === newDate.date)) {
+                alert('This date is already added');
+                return;
+              }
+
+              setForm({
+                ...form,
+                availableDates: [...form.availableDates, newDate].sort((a, b) => a.date.localeCompare(b.date)),
+              });
+
+              dateInput.value = '';
+              startInput.value = '09:00';
+              endInput.value = '17:00';
+              slotInput.value = '30';
+            }}
+          >
+            <FiPlus className="mr-1" /> Add Date
+          </Button>
+        </div>
+
+        {form.availableDates.length === 0 ? (
+          <p className="text-sm text-neutral-gray italic py-3 text-center border border-dashed border-neutral-border rounded-lg">
+            No available dates added yet. Add dates above.
+          </p>
+        ) : (
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {form.availableDates.map((dateSlot, idx) => {
+              const dateObj = new Date(dateSlot.date);
+              const formattedDate = dateObj.toLocaleDateString('en-US', {
+                weekday: 'short',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              });
+              return (
+                <div key={idx} className="flex items-center justify-between bg-white border border-neutral-border rounded-lg p-3">
+                  <div className="flex-1">
+                    <p className="font-medium text-neutral-dark text-sm">{formattedDate}</p>
+                    <p className="text-xs text-neutral-gray mt-0.5">
+                      {dateSlot.start_time} - {dateSlot.end_time} • {dateSlot.slot_duration_minutes} min slots
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm({
+                      ...form,
+                      availableDates: form.availableDates.filter((_, i) => i !== idx),
+                    })}
+                    className="text-error hover:text-error/80 p-2"
+                  >
+                    <FiTrash2 size={16} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </>
+    );
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <ModalPortal>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-neutral-border">
           <h2 className="text-xl font-semibold text-neutral-dark">
             {mode === 'add' ? 'Add New Doctor' : 'Edit Doctor'}
@@ -106,260 +379,189 @@ function DoctorModal({ mode, initialData, departments, onClose, onSave, saving, 
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Full Name" required>
-              <input className={INPUT} value={form.name} placeholder="Dr. Ahmed Ali"
-                onChange={e => set('name', e.target.value)} />
-            </Field>
-            <Field label="Title">
-              <input className={INPUT} value={form.title} placeholder="Consultant Cardiologist"
-                onChange={e => set('title', e.target.value)} />
-            </Field>
-          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
+            <div className="space-y-4 rounded-3xl border border-neutral-border bg-neutral-light/60 p-4">
+              <h3 className="text-base font-semibold text-neutral-dark">Department & Availability</h3>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Specialty" required>
-              <input className={INPUT} value={form.specialty} placeholder="e.g. Cardiology"
-                onChange={e => set('specialty', e.target.value)} />
-            </Field>
-            <Field label="Experience">
-              <input className={INPUT} value={form.experience} placeholder="e.g. 10 years"
-                onChange={e => set('experience', e.target.value)} />
-            </Field>
-          </div>
+              <Field label="Department" required>
+                <select className={INPUT} value={form.department} onChange={e => set('department', e.target.value)}>
+                  <option value="">-- Select department --</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                  <option value="__new__">+ Create new department…</option>
+                </select>
+              </Field>
 
-          <Field label="Email">
-            <input className={INPUT} type="email" value={form.email} placeholder="doctor@hospital.com"
-              onChange={e => set('email', e.target.value)} />
-          </Field>
+              {form.department === '__new__' && (
+                <Field label="New Department Name" required>
+                  <input className={INPUT} value={form.newDeptName} placeholder="e.g. Neurology"
+                    onChange={e => set('newDeptName', e.target.value)} />
+                </Field>
+              )}
 
-          <Field label="Bio">
-            <textarea className={INPUT + ' resize-none'} rows={3} value={form.bio}
-              placeholder="Brief biography..."
-              onChange={e => set('bio', e.target.value)} />
-          </Field>
+              <Field label="Availability type" required>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['week', 'month', 'year'] as const).map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => set('availabilityType', type)}
+                      className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${form.availabilityType === type
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-white text-neutral-dark border-neutral-border hover:border-neutral-border/80'
+                      }`}
+                    >
+                      {type === 'week' ? 'Week' : type === 'month' ? 'Month' : 'Year'}
+                    </button>
+                  ))}
+                </div>
+              </Field>
 
-          <Field label="Photo">
-            <div className="flex items-center gap-4">
-              <div className="h-16 w-16 overflow-hidden rounded-xl border border-neutral-border bg-neutral-light flex items-center justify-center">
-                {previewUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={previewUrl} alt="Doctor" className="h-full w-full object-cover" />
-                ) : (
-                  <span className="text-xs text-neutral-gray">No photo</span>
-                )}
+              <Field label="Availability window" required>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-dark mb-1">Start time</label>
+                    <input
+                      type="time"
+                      value={form.availabilityStartTime}
+                      onChange={e => set('availabilityStartTime', e.target.value)}
+                      className={INPUT}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-dark mb-1">End time</label>
+                    <input
+                      type="time"
+                      value={form.availabilityEndTime}
+                      onChange={e => set('availabilityEndTime', e.target.value)}
+                      className={INPUT}
+                    />
+                  </div>
+                </div>
+              </Field>
+
+              <Field label="Slot duration" required>
+                <select
+                  value={String(form.availabilitySlotDurationMinutes)}
+                  onChange={e => set('availabilitySlotDurationMinutes', Number(e.target.value))}
+                  className={INPUT}
+                >
+                  <option value="15">15 minutes</option>
+                  <option value="30">30 minutes</option>
+                  <option value="45">45 minutes</option>
+                  <option value="60">60 minutes</option>
+                </select>
+              </Field>
+
+              <div className="rounded-2xl border border-neutral-border bg-white p-4">
+                {renderAvailabilityInputs()}
               </div>
-              <div className="flex flex-col gap-2">
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Full Name" required>
+                  <input className={INPUT} value={form.name} placeholder="Dr. Ahmed Ali"
+                    onChange={e => set('name', e.target.value)} />
+                </Field>
+                <Field label="Title">
+                  <input className={INPUT} value={form.title} placeholder="Consultant Cardiologist"
+                    onChange={e => set('title', e.target.value)} />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Specialty" required>
+                  <input className={INPUT} value={form.specialty} placeholder="e.g. Cardiology"
+                    onChange={e => set('specialty', e.target.value)} />
+                </Field>
+                <Field label="Experience">
+                  <input className={INPUT} value={form.experience} placeholder="e.g. 10 years"
+                    onChange={e => set('experience', e.target.value)} />
+                </Field>
+              </div>
+
+              <Field label="Email">
+                <input className={INPUT} type="email" value={form.email} placeholder="doctor@hospital.com"
+                  onChange={e => set('email', e.target.value)} />
+              </Field>
+
+              <Field label="Bio">
+                <textarea className={INPUT + ' resize-none'} rows={3} value={form.bio}
+                  placeholder="Brief biography..."
+                  onChange={e => set('bio', e.target.value)} />
+              </Field>
+
+              <Field label="Photo">
+                <div className="flex items-center gap-4">
+                  <div className="h-16 w-16 overflow-hidden rounded-xl border border-neutral-border bg-neutral-light flex items-center justify-center">
+                    {previewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={previewUrl} alt="Doctor" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-xs text-neutral-gray">No photo</span>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        setForm((prev) => ({
+                          ...prev,
+                          image: file,
+                          imagePreview: file ? URL.createObjectURL(file) : '',
+                          image_url: file ? '' : prev.image_url,
+                        }));
+                      }}
+                    />
+                    <Button type="button" variant="secondary" onClick={() => imageInputRef.current?.click()}>
+                      <FiUpload className="mr-2" /> Import Photo
+                    </Button>
+                    {previewUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => setForm((prev) => ({ ...prev, image: null, imagePreview: '', image_url: '' }))}
+                        className="text-xs text-error hover:underline text-left"
+                      >
+                        Remove photo
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </Field>
+
+              <Field label="Photo URL">
                 <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
+                  className={INPUT}
+                  value={form.image_url}
+                  placeholder="https://example.com/doctor.jpg"
                   onChange={(event) => {
-                    const file = event.target.files?.[0] || null;
+                    const nextUrl = event.target.value;
                     setForm((prev) => ({
                       ...prev,
-                      image: file,
-                      imagePreview: file ? URL.createObjectURL(file) : '',
-                      image_url: file ? '' : prev.image_url,
+                      image_url: nextUrl,
+                      image: null,
+                      imagePreview: nextUrl.trim(),
                     }));
                   }}
                 />
-                <Button type="button" variant="secondary" onClick={() => imageInputRef.current?.click()}>
-                  <FiUpload className="mr-2" /> Import Photo
-                </Button>
-                {previewUrl ? (
-                  <button
-                    type="button"
-                    onClick={() => setForm((prev) => ({ ...prev, image: null, imagePreview: '', image_url: '' }))}
-                    className="text-xs text-error hover:underline text-left"
-                  >
-                    Remove photo
-                  </button>
-                ) : null}
-              </div>
+              </Field>
+
+              {mode === 'edit' && (
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={form.is_active}
+                    onChange={e => set('is_active', e.target.checked)}
+                    className="w-4 h-4 rounded accent-primary" />
+                  <span className="text-sm font-medium text-neutral-dark">Active (visible on website)</span>
+                </label>
+              )}
             </div>
-          </Field>
-
-          <Field label="Photo URL">
-            <input
-              className={INPUT}
-              value={form.image_url}
-              placeholder="https://example.com/doctor.jpg"
-              onChange={(event) => {
-                const nextUrl = event.target.value;
-                setForm((prev) => ({
-                  ...prev,
-                  image_url: nextUrl,
-                  image: null,
-                  imagePreview: nextUrl.trim(),
-                }));
-              }}
-            />
-          </Field>
-
-          {/* Available Dates */}
-          <div className="border-t border-neutral-border pt-4 mt-2">
-            <h3 className="text-base font-semibold text-neutral-dark mb-3">Available Dates</h3>
-            <p className="text-sm text-neutral-gray mb-4">Add specific dates when this doctor is available for appointments</p>
-            
-            {/* New date entry form */}
-            <div className="bg-neutral-light/50 rounded-lg p-3 mb-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-                <div>
-                  <label className="block text-xs font-medium text-neutral-gray mb-1">Date</label>
-                  <input
-                    type="date"
-                    id="new-date"
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-2 py-1.5 border border-neutral-border rounded text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-neutral-gray mb-1">Slot Duration</label>
-                  <select
-                    id="new-slot-duration"
-                    defaultValue="30"
-                    className="w-full px-2 py-1.5 border border-neutral-border rounded text-sm"
-                  >
-                    <option value="15">15 minutes</option>
-                    <option value="30">30 minutes</option>
-                    <option value="45">45 minutes</option>
-                    <option value="60">60 minutes</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                <div>
-                  <label className="block text-xs font-medium text-neutral-gray mb-1">Start Time</label>
-                  <input
-                    type="time"
-                    id="new-start-time"
-                    defaultValue="09:00"
-                    className="w-full px-2 py-1.5 border border-neutral-border rounded text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-neutral-gray mb-1">End Time</label>
-                  <input
-                    type="time"
-                    id="new-end-time"
-                    defaultValue="17:00"
-                    className="w-full px-2 py-1.5 border border-neutral-border rounded text-sm"
-                  />
-                </div>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  const dateInput = document.getElementById('new-date') as HTMLInputElement;
-                  const startInput = document.getElementById('new-start-time') as HTMLInputElement;
-                  const endInput = document.getElementById('new-end-time') as HTMLInputElement;
-                  const slotInput = document.getElementById('new-slot-duration') as HTMLSelectElement;
-                  
-                  if (!dateInput.value) {
-                    alert('Please select a date');
-                    return;
-                  }
-                  
-                  const newDate = {
-                    date: dateInput.value,
-                    start_time: startInput.value,
-                    end_time: endInput.value,
-                    slot_duration_minutes: Number(slotInput.value),
-                  };
-                  
-                  // Check if date already exists
-                  if (form.availableDates.some(d => d.date === newDate.date)) {
-                    alert('This date is already added');
-                    return;
-                  }
-                  
-                  setForm({
-                    ...form,
-                    availableDates: [...form.availableDates, newDate].sort((a, b) => a.date.localeCompare(b.date)),
-                  });
-                  
-                  // Reset inputs
-                  dateInput.value = '';
-                  startInput.value = '09:00';
-                  endInput.value = '17:00';
-                  slotInput.value = '30';
-                }}
-              >
-                <FiPlus className="mr-1" /> Add Date
-              </Button>
-            </div>
-
-            {/* List of added dates */}
-            {form.availableDates.length === 0 ? (
-              <p className="text-sm text-neutral-gray italic py-3 text-center border border-dashed border-neutral-border rounded-lg">
-                No available dates added yet. Add dates above.
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {form.availableDates.map((dateSlot, idx) => {
-                  const dateObj = new Date(dateSlot.date);
-                  const formattedDate = dateObj.toLocaleDateString('en-US', { 
-                    weekday: 'short', 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: 'numeric' 
-                  });
-                  
-                  return (
-                    <div key={idx} className="flex items-center justify-between bg-white border border-neutral-border rounded-lg p-3">
-                      <div className="flex-1">
-                        <p className="font-medium text-neutral-dark text-sm">{formattedDate}</p>
-                        <p className="text-xs text-neutral-gray mt-0.5">
-                          {dateSlot.start_time} - {dateSlot.end_time} • {dateSlot.slot_duration_minutes} min slots
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setForm({
-                            ...form,
-                            availableDates: form.availableDates.filter((_, i) => i !== idx),
-                          });
-                        }}
-                        className="text-error hover:text-error/80 p-2"
-                      >
-                        <FiTrash2 size={16} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
-
-          <Field label="Department" required>
-            <select className={INPUT} value={form.department} onChange={e => set('department', e.target.value)}>
-              <option value="">-- Select department --</option>
-              {departments.map(d => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-              <option value="__new__">+ Create new department…</option>
-            </select>
-          </Field>
-
-          {form.department === '__new__' && (
-            <Field label="New Department Name" required>
-              <input className={INPUT} value={form.newDeptName} placeholder="e.g. Neurology"
-                onChange={e => set('newDeptName', e.target.value)} />
-            </Field>
-          )}
-
-          {mode === 'edit' && (
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" checked={form.is_active}
-                onChange={e => set('is_active', e.target.checked)}
-                className="w-4 h-4 rounded accent-primary" />
-              <span className="text-sm font-medium text-neutral-dark">Active (visible on website)</span>
-            </label>
-          )}
         </div>
 
         <div className="flex flex-col gap-3 p-6 border-t border-neutral-border sm:flex-row sm:items-center sm:justify-end">
@@ -371,7 +573,7 @@ function DoctorModal({ mode, initialData, departments, onClose, onSave, saving, 
           </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -385,7 +587,7 @@ function ImportModal({ rows, departments, onClose, onConfirm, importing }: {
   importing: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+    <ModalPortal>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-neutral-border">
           <div>
@@ -446,7 +648,7 @@ function ImportModal({ rows, departments, onClose, onConfirm, importing }: {
           </Button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -460,7 +662,7 @@ function DeleteConfirmModal({ doctor, onCancel, onConfirm, deleting, error }: {
   error: string | null;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+    <ModalPortal>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         <div className="flex items-start gap-4 p-6 border-b border-neutral-border">
           <div className="h-11 w-11 rounded-full bg-red-50 text-error flex items-center justify-center">
@@ -494,7 +696,7 @@ function DeleteConfirmModal({ doctor, onCancel, onConfirm, deleting, error }: {
           </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -579,6 +781,44 @@ export default function HospitalDoctorsPage() {
     return form.department;
   };
 
+  const syncDoctorAvailability = async (doctorId: string, form: DoctorFormData): Promise<boolean> => {
+    if (form.availabilityType === 'week') {
+      if (form.weeklyDays.length === 0) {
+        setModalError('Please choose at least one weekday.');
+        return false;
+      }
+      await hospitalAdminApi.syncDoctorWeeklySchedules(doctorId, form.weeklyDays.map(day => ({
+        day_of_week: day,
+        start_time: form.availabilityStartTime,
+        end_time: form.availabilityEndTime,
+        slot_duration_minutes: form.availabilitySlotDurationMinutes,
+      })));
+      return true;
+    }
+
+    if (form.availabilityType === 'month') {
+      if (form.monthlyDayNumbers.length === 0) {
+        setModalError('Please choose at least one day of the month.');
+        return false;
+      }
+      const [year, month] = form.monthlyMonth.split('-').map(Number);
+      const daysInMonth = getDaysInMonth(year, month);
+      const dates = form.monthlyDayNumbers
+        .filter(day => day >= 1 && day <= daysInMonth)
+        .map(day => ({
+          date: `${year}-${pad2(month)}-${pad2(day)}`,
+          start_time: form.availabilityStartTime,
+          end_time: form.availabilityEndTime,
+          slot_duration_minutes: form.availabilitySlotDurationMinutes,
+        }));
+      await hospitalAdminApi.syncDoctorAvailableDates(doctorId, dates);
+      return true;
+    }
+
+    await hospitalAdminApi.syncDoctorAvailableDates(doctorId, form.availableDates);
+    return true;
+  };
+
   const buildDoctorPayload = (
     form: DoctorFormData,
     deptId: string,
@@ -626,7 +866,8 @@ export default function HospitalDoctorsPage() {
     const payload = buildDoctorPayload(form, deptId, bio, false);
     const res = await hospitalAdminApi.createDoctor(payload);
     if (res.error || !res.data) { setModalError(res.error ?? 'Failed to create doctor.'); setModalSaving(false); return; }
-    await hospitalAdminApi.syncDoctorAvailableDates(res.data.id, form.availableDates);
+    const synced = await syncDoctorAvailability(res.data.id, form);
+    if (!synced) { setModalSaving(false); return; }
     await load();
     setAddOpen(false);
     setModalSaving(false);
@@ -644,7 +885,8 @@ export default function HospitalDoctorsPage() {
     const payload = buildDoctorPayload(form, deptId, bio, true);
     const res = await hospitalAdminApi.updateDoctor(editDoctor.id, payload);
     if (res.error) { setModalError(res.error); setModalSaving(false); return; }
-    await hospitalAdminApi.syncDoctorAvailableDates(editDoctor.id, form.availableDates);
+    const synced = await syncDoctorAvailability(editDoctor.id, form);
+    if (!synced) { setModalSaving(false); return; }
     await load();
     setEditDoctor(null);
     setModalSaving(false);
@@ -750,6 +992,29 @@ export default function HospitalDoctorsPage() {
       slot_duration_minutes: s.slot_duration_minutes,
     })).sort((a, b) => a.date.localeCompare(b.date));
     
+    const specificDates = (doc.schedules || [])
+      .filter((s: any) => s.specific_date)
+      .map((s: any) => ({
+        date: s.specific_date,
+        start_time: s.start_time.substring(0, 5),
+        end_time: s.end_time.substring(0, 5),
+        slot_duration_minutes: s.slot_duration_minutes,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const weeklyDays = (doc.schedules || [])
+      .filter((s: any) => !s.specific_date)
+      .map((s: any) => s.day_of_week)
+      .filter((value: number, index: number, self: number[]) => self.indexOf(value) === index)
+      .sort((a: number, b: number) => a - b);
+
+    const availabilityType = weeklyDays.length > 0 ? 'week' : specificDates.length > 0 ? 'year' : 'week';
+    const availabilityStartTime = specificDates[0]?.start_time || doc.schedules?.[0]?.start_time?.substring(0, 5) || '09:00';
+    const availabilityEndTime = specificDates[0]?.end_time || doc.schedules?.[0]?.end_time?.substring(0, 5) || '17:00';
+    const availabilitySlotDurationMinutes = specificDates[0]?.slot_duration_minutes || doc.schedules?.[0]?.slot_duration_minutes || 30;
+
+    const monthlyMonth = new Date().toISOString().slice(0, 7);
+
     return {
       name: doc.name,
       title: parts[0] ?? '',
@@ -763,7 +1028,14 @@ export default function HospitalDoctorsPage() {
       image: null,
       image_url: doc.image_url ?? '',
       imagePreview: resolvedImage,
-      availableDates,
+      availabilityType,
+      weeklyDays: weeklyDays.length > 0 ? weeklyDays : [1, 2, 3, 4, 5],
+      monthlyMonth,
+      monthlyDayNumbers: specificDates.map(d => Number(d.date.split('-')[2])).filter(Boolean),
+      availabilityStartTime,
+      availabilityEndTime,
+      availabilitySlotDurationMinutes,
+      availableDates: specificDates,
     };
   };
 

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   FiHome,
   FiGlobe,
+  FiLayers,
   FiLayout,
   FiPackage,
   FiInfo,
@@ -157,6 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ userType, isOpen = true, onClo
       ? [
           { label: 'My Website', icon: <FiGlobe />, href: '/dashboard/business-info' },
           { label: 'Hospital Setup', icon: <FiLayout />, href: '/dashboard/hospital/setup' },
+          { label: 'Departments', icon: <FiLayers />, href: '/dashboard/hospital/departments' },
           { label: 'Customization', icon: <FiLayout />, href: '/dashboard/hospital/customization' },
           { label: 'Doctors', icon: <FiLayout />, href: '/dashboard/hospital/doctors' },
           { label: 'Appointments', icon: <FiShoppingCart />, href: '/dashboard/hospital/appointments' },

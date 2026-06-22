@@ -57,6 +57,15 @@ function toBackendWebsite(raw: string): string {
   return `https://${value}`
 }
 
+function validatePhone(value: string): string | null {
+  const digits = value.replace(/\D/g, '')
+  if (!digits) return null
+  if (!/^01\d{9}$/.test(digits)) {
+    return 'Phone must be 11 digits and start with 01'
+  }
+  return null
+}
+
 export default function BusinessInfoPage() {
   const router = useRouter()
   const { showToast } = useToast()
@@ -64,6 +73,7 @@ export default function BusinessInfoPage() {
   const [isPublishing, setIsPublishing] = useState(false)
   const [isPublished, setIsPublished] = useState(false)
   const [userType, setUserType] = useState<'hospital' | 'pharmacy'>('hospital')
+  const [phoneError, setPhoneError] = useState<string | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
     const [logoUrlForStorage, setLogoUrlForStorage] = useState<string | null>(null)
   const normalizedLogoPreview = useMemo(() => normalizeLogoUrl(logoPreview), [logoPreview])
@@ -255,6 +265,12 @@ export default function BusinessInfoPage() {
 
   const handleSaveDraft = async () => {
     if (isSavingDraft) return
+    const phoneValidationError = validatePhone(formData.contactPhone)
+    if (phoneValidationError) {
+      setPhoneError(phoneValidationError)
+      return
+    }
+
     setIsSavingDraft(true)
 
     let latestLogoUrl = logoUrlForStorage
@@ -285,6 +301,12 @@ export default function BusinessInfoPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const phoneValidationError = validatePhone(formData.contactPhone)
+    if (phoneValidationError) {
+      setPhoneError(phoneValidationError)
+      return
+    }
+
     setIsPublishing(true)
     let latestLogoUrl = logoUrlForStorage
 
@@ -591,11 +613,13 @@ export default function BusinessInfoPage() {
               <Input
                 label="Phone"
                 type="tel"
-                placeholder="1234567890"
+                placeholder="01XXXXXXXXX"
                 value={formData.contactPhone}
+                error={phoneError || undefined}
                 onChange={(e) => {
                   const value = e.target.value.replace(/\D/g, '')
                   setFormData({ ...formData, contactPhone: value })
+                  setPhoneError(validatePhone(value))
                 }}
               />
               <Input

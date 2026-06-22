@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import HospitalChatWidget from '@/components/hospital/HospitalChatWidget';
-import { getHospitalProfile } from '@/lib/hospitalApi';
+import { getHospitalBusinessInfo, getHospitalProfile } from '@/lib/hospitalApi';
 import { normalizeLogoUrl } from '@/lib/storage';
 
 interface LayoutProps {
@@ -12,6 +12,7 @@ interface LayoutProps {
 export default async function HospitalLayout({ children, params }: LayoutProps) {
     const resolvedParams = await params;
     const profile = await getHospitalProfile(resolvedParams.subdomain);
+    const businessInfo = await getHospitalBusinessInfo(resolvedParams.subdomain);
     
     const theme = profile?.theme_settings || {};
     const primaryColor = theme.primaryColor || '#2563eb';
@@ -243,7 +244,7 @@ export default async function HospitalLayout({ children, params }: LayoutProps) 
                                     +
                                 </span>
                             )}
-                            <span className="text-lg font-bold tracking-tight">{profile?.name || resolvedParams.subdomain}</span>
+                            <span className="text-lg font-bold tracking-tight">{businessInfo?.name || profile?.name || resolvedParams.subdomain}</span>
                         </Link>
 
                         <nav className="hidden items-center gap-7 text-sm font-medium text-slate-600 md:flex">
