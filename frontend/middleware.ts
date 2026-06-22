@@ -38,6 +38,19 @@ export default function middleware(req: NextRequest) {
         return NextResponse.next();
     }
 
+    // Exclude system paths from subdomain rewriting
+    const path = url.pathname;
+    if (
+        path.startsWith('/dashboard') ||
+        path.startsWith('/login') ||
+        path.startsWith('/signup') ||
+        path.startsWith('/templates') ||
+        path.startsWith('/forgot-password') ||
+        path.startsWith('/reset-password')
+    ) {
+        return NextResponse.next();
+    }
+
     // Rewrite to our dynamic subdomain route
     return NextResponse.rewrite(new URL(`/${subdomain}${url.pathname}${url.search}`, req.url));
 }

@@ -1,5 +1,5 @@
 import { API_BASE_URL, getAuthToken, type ApiResponse } from '@/lib/api';
-import type { Appointment, Department, Doctor, HospitalProfile, AppointmentStatus } from '@/types/hospital';
+import type { Appointment, Department, Doctor, HospitalProfile, HospitalPhoto, AppointmentStatus } from '@/types/hospital';
 
 function authHeaders(): HeadersInit {
   const token = getAuthToken();
@@ -372,5 +372,80 @@ export const hospitalAdminApi = {
     });
     
     await Promise.allSettled(createRequests);
+  },
+
+  // ─── Photos ────────────────────────────────────────────────────────────────
+
+  async listPhotos(): Promise<ApiResponse<HospitalPhoto[]>> {
+    const response = await fetch(`${API_BASE_URL}/hospital/admin/photos/`, {
+      method: 'GET',
+      headers: authHeaders(),
+      cache: 'no-store',
+    });
+    const parsed = await parseJson<unknown>(response);
+    if (!parsed.data) return { error: parsed.error, status: parsed.status, errorDetails: parsed.errorDetails };
+    return { data: normalizeList<HospitalPhoto>(parsed.data), status: parsed.status };
+  },
+
+  async uploadPhoto(payload: FormData | {
+    image?: File;
+    image_url?: string;
+    alt_text?: string;
+    caption?: string;
+    display_order?: number;
+  }): Promise<ApiResponse<HospitalPhoto>> {
+    const isFormData = payload instanceof FormData;
+    
+    const headers: HeadersInit = isFormData 
+        ? { ...(getAuthToken() ? { Authorization: `Bearer ${getAuthToken()}` } : {}) }
+        : authHeaders();
+
+    const response = await fetch(`${API_BASE_URL}/hospital/admin/photos/`, {
+      method: 'POST',
+      headers,
+      body: isFormData ? payload : JSON.stringify(payload),
+      cache: 'no-store',
+    });
+    return parseJson<HospitalPhoto>(response);
+  },
+
+  async updatePhoto(photoId: string, payload: FormData | Partial<HospitalPhoto>): Promise<ApiResponse<HospitalPhoto>> {
+    const isFormData = payload instanceof FormData;
+    
+    const headers: HeadersInit = isFormData 
+        ? { ...(getAuthToken() ? { Authorization: `Bearer ${getAuthToken()}` } : {}) }
+        : authHeaders();
+
+    const response = await fetch(`${API_BASE_URL}/hospital/admin/photos/${photoId}/`, {
+      method: 'PATCH',
+      headers,
+      body: isFormData ? payload : JSON.stringify(payload),
+      cache: 'no-store',
+    });
+    return parseJson<HospitalPhoto>(response);
+  },
+
+  async deletePhoto(photoId: string): Promise<ApiResponse<void>> {
+    const response = await fetch(`${API_BASE_URL}/hospital/admin/photos/${photoId}/`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+      cache: 'no-store',
+    });
+    if (response.status === 204) {
+      return { data: undefined, status: 204 };
+    }
+    return parseJson<void>(response);
+  },
+
+  async updatePhotoOrder(photoIds: string[]): Promise<ApiResponse<HospitalPhoto[]>> {
+    const response = await fetch(`${API_BASE_URL}/hospital/admin/photos/update_order/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ photo_ids: photoIds }),
+      cache: 'no-store',
+    });
+    const parsed = await parseJson<unknown>(response);
+    if (!parsed.data) return { error: parsed.error, status: parsed.status, errorDetails: parsed.errorDetails };
+    return { data: normalizeList<HospitalPhoto>(parsed.data), status: parsed.status };
   },
 };

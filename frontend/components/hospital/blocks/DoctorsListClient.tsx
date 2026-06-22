@@ -83,84 +83,90 @@ function DoctorModal({ doc, onClose }: { doc: Doctor; onClose: () => void }) {
 
       {/* Panel */}
       <div
-        className="relative w-full sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl shadow-2xl"
+        className="relative w-full sm:max-w-xl max-h-[90vh] overflow-y-auto no-scrollbar rounded-t-3xl sm:rounded-3xl shadow-2xl p-6 sm:p-8"
         style={{ backgroundColor: 'var(--hospital-surface)' }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Close */}
+        {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full shadow-sm transition-colors"
-          style={{ backgroundColor: 'var(--hospital-surface-alt)', color: 'var(--hospital-text-muted)' }}
+          className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full hover:bg-neutral-light/50 transition-colors"
+          style={{ color: 'var(--hospital-text-muted)' }}
           aria-label="Close"
         >
-          <FiX size={16} />
+          <FiX size={20} />
         </button>
 
-        {/* Photo strip */}
-        <div className="relative h-48 overflow-hidden rounded-t-3xl sm:rounded-t-3xl">
-          {imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={imageUrl} alt={doc.name} className="h-full w-full object-cover" />
-          ) : (
-            <div
-              className="flex h-full w-full items-center justify-center text-5xl font-bold"
-              style={{ backgroundColor: 'var(--hospital-primary-soft)', color: 'var(--hospital-primary-strong)' }}
-            >
-              {doc.name.charAt(0)}
+        {/* Modal Content Layout */}
+        <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start pt-2">
+          {/* Left Column: Photo & Availability */}
+          <div className="flex-shrink-0 flex flex-col items-center gap-3">
+            <div className="w-32 h-40 sm:w-36 sm:h-44 rounded-2xl overflow-hidden bg-neutral-light border border-neutral-border shadow-sm">
+              {imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={imageUrl} alt={doc.name} className="h-full w-full object-cover" />
+              ) : (
+                <div
+                  className="flex h-full w-full items-center justify-center text-5xl font-bold"
+                  style={{ backgroundColor: 'var(--hospital-primary-soft)', color: 'var(--hospital-primary-strong)' }}
+                >
+                  {doc.name.charAt(0)}
+                </div>
+              )}
             </div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-          {/* Today badge */}
-          <div className="absolute bottom-4 left-4">
+
+            {/* Availability Badge */}
             {doc.schedules?.some(s => s.day_of_week === todayIndex) ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700">
                 <FiCheckCircle size={12} /> Available today
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
-                <FiClock size={12} /> Schedule available
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-light border border-neutral-border px-3 py-1 text-xs font-semibold text-neutral-gray">
+                <FiClock size={12} /> Has schedule
               </span>
             )}
           </div>
-        </div>
 
-        {/* Info */}
-        <div className="p-6">
-          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--hospital-text-muted)' }}>Doctor</p>
-          <h2 className="mt-1 text-2xl font-bold" style={{ color: 'var(--hospital-text)' }}>{doc.name}</h2>
-          {title && <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--hospital-text-muted)' }}>{title}</p>}
+          {/* Right Column: Name, Bio & Tags */}
+          <div className="flex-1 w-full text-center sm:text-left">
+            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--hospital-text-muted)' }}>Doctor</p>
+            <h2 className="mt-1 text-2xl font-bold leading-tight" style={{ color: 'var(--hospital-text)' }}>{doc.name}</h2>
+            {title && <p className="text-sm font-medium mt-0.5" style={{ color: 'var(--hospital-text-muted)' }}>{title}</p>}
 
-          {/* Tags */}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <span
-              className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
-              style={{ backgroundColor: 'var(--hospital-primary-soft)', color: 'var(--hospital-primary-strong)' }}
-            >
-              {doc.specialty}
-            </span>
-            <span
-              className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
-              style={{ backgroundColor: 'var(--hospital-surface-alt)', color: 'var(--hospital-text-muted)' }}
-            >
-              <FiBriefcase size={11} /> {doc.department_name || 'General'}
-            </span>
-            {experience && (
+            {/* Tags */}
+            <div className="mt-3 flex flex-wrap justify-center sm:justify-start gap-2">
+              <span
+                className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
+                style={{ backgroundColor: 'var(--hospital-primary-soft)', color: 'var(--hospital-primary-strong)' }}
+              >
+                {doc.specialty}
+              </span>
               <span
                 className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
                 style={{ backgroundColor: 'var(--hospital-surface-alt)', color: 'var(--hospital-text-muted)' }}
               >
-                <FiStar size={11} /> {experience}
+                <FiBriefcase size={11} /> {doc.department_name || 'General'}
               </span>
-            )}
+              {experience && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
+                  style={{ backgroundColor: 'var(--hospital-surface-alt)', color: 'var(--hospital-text-muted)' }}
+                >
+                  <FiStar size={11} /> {experience}
+                </span>
+              )}
+            </div>
+
+            {/* Bio */}
+            <p className="mt-4 text-sm leading-relaxed" style={{ color: 'var(--hospital-text-muted)' }}>{summary}</p>
           </div>
+        </div>
 
-          {/* Bio */}
-          <p className="mt-4 text-sm leading-relaxed" style={{ color: 'var(--hospital-text-muted)' }}>{summary}</p>
-
+        {/* Weekly Schedule & Booking Section */}
+        <div className="mt-6 border-t border-neutral-light pt-6">
           {/* Schedule */}
           {schedules.length > 0 && (
-            <div className="mt-5">
+            <div>
               <p className="mb-3 text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--hospital-text-muted)' }}>
                 Weekly Schedule
               </p>

@@ -12,6 +12,7 @@ import { getScopedItem, normalizeLogoUrl, setPublicSiteItem, setScopedItem } fro
 import { businessInfoApi } from '@/lib/api'
 import { useToast } from '@/components/ui/ToastProvider'
 import { pharmacyApi } from '@/lib/pharmacy'
+import { HospitalPhotosSection } from '@/components/hospital/HospitalPhotosSection'
 import dynamic from 'next/dynamic'
 
 const LocationMapPicker = dynamic(() => import('@/components/LocationMapPicker'), {
@@ -637,6 +638,11 @@ export default function BusinessInfoPage() {
                 />
             </div>
           </Card>
+
+          {/* Hospital Photos - Only for hospital users */}
+          {userType === 'hospital' && (
+            <HospitalPhotosSection />
+          )}
 
           {/* Actions */}
           {isPublished ? (

@@ -106,3 +106,15 @@ export interface HospitalProfile {
     created_at: string;
     updated_at: string;
 }
+
+export interface HospitalPhoto {
+    id: string;
+    image?: string | null;
+    image_url?: string | null;
+    alt_text: string;
+    caption: string;
+    display_order: number;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}

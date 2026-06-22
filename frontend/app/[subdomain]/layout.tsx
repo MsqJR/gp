@@ -307,6 +307,7 @@ export default async function HospitalLayout({ children, params }: LayoutProps) 
                 subdomain={resolvedParams.subdomain} 
                 hospitalName={chatbotName} 
                 hospitalPhone={emergencyNumber}
+                whatsAppNumber={businessInfo?.contact_phone}
             />
         </>
     );

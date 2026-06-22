@@ -34,6 +34,7 @@ interface HospitalChatWidgetProps {
   subdomain: string
   enabled?: boolean
   useStreaming?: boolean
+  whatsAppNumber?: string
 }
 
 const FALLBACK_DISCLAIMER =
@@ -77,12 +78,24 @@ function urgencyClasses(urgency?: string) {
   }
 }
 
+function formatWhatsAppLink(phone: string) {
+  let digits = phone.replace(/\D/g, '')
+  if (digits.startsWith('00')) {
+    digits = digits.slice(2)
+  }
+  if (digits.startsWith('01') && digits.length === 11) {
+    digits = '2' + digits
+  }
+  return `https://wa.me/${digits}`
+}
+
 export default function HospitalChatWidget({
   hospitalName = 'Hospital',
   hospitalPhone = '',
   subdomain,
   enabled = true,
   useStreaming = true,
+  whatsAppNumber,
 }: HospitalChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
@@ -310,25 +323,52 @@ export default function HospitalChatWidget({
 
   if (!isOpen) {
     return (
-      <button
-        id="hospital-chat-toggle"
-        onClick={() => {
-          setIsOpen(true)
-          setIsMinimized(false)
-        }}
-        className="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-blue-600 to-teal-500 rounded-full shadow-2xl flex items-center justify-center text-white hover:scale-110 transition-transform z-50 group"
-        aria-label="Open AI Symptom Chatbot"
-      >
-        <FiMessageSquare size={24} />
-        <span
-          className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
-            enabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'
-          }`}
-        />
-        <span className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-          {enabled ? 'Medical AI assistant' : 'Chatbot unavailable'}
-        </span>
-      </button>
+      <>
+        {whatsAppNumber && (
+          <a
+            id="hospital-whatsapp-toggle"
+            href={formatWhatsAppLink(whatsAppNumber)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="fixed bottom-[104px] right-6 w-16 h-16 bg-[#25D366] rounded-full shadow-2xl shadow-emerald-500/20 flex items-center justify-center text-white hover:scale-110 hover:bg-[#20ba5a] transition-all duration-300 z-50 group"
+            aria-label="Chat on WhatsApp"
+          >
+            <svg
+              stroke="currentColor"
+              fill="currentColor"
+              strokeWidth="0"
+              viewBox="0 0 448 512"
+              height="28"
+              width="28"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M380.9 97.1C339 55.1 283.2 32 223.9 32 100.5 32 0 132.5 0 255.9c0 39.4 10.3 77.9 29.9 111.9L0 480l114.7-30c32.7 17.9 69.5 27.3 107.1 27.3h.1c123.3 0 223.8-100.5 223.8-223.9 0-59.7-23.2-115.8-64.8-156.3zM223.9 445.2c-33.3 0-66-8.9-94.4-25.7l-6.8-4-70.1 18.4 18.7-68.2-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 54 81.2 54 130.5 0 101.7-82.8 184.5-184.6 184.5zm100.5-137.5c-5.5-2.7-32.5-16-37.6-17.8-5.1-1.9-8.8-2.7-12.5 2.7-3.7 5.5-14.3 17.8-17.6 21.5-3.3 3.7-6.5 4.1-12 1.4-5.5-2.7-23.2-8.5-44.1-27.1-16.3-14.5-27.3-32.5-30.5-38-3.3-5.5-.4-8.5 2.4-11.2 2.5-2.4 5.5-6.5 8.2-9.7 2.7-3.3 3.7-5.5 5.5-9.2 1.8-3.7.9-6.9-.5-9.7-1.4-2.7-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.5-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 13.3 5.7 23.6 9.2 31.6 11.7 13.3 4.2 25.4 3.6 35 2.2 10.7-1.6 32.5-13.3 37-26.2 4.6-12.9 4.6-24 3.2-26.2-1.3-2.2-5-3.6-10.5-6.3z" />
+            </svg>
+            <span className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+              Chat on WhatsApp
+            </span>
+          </a>
+        )}
+        <button
+          id="hospital-chat-toggle"
+          onClick={() => {
+            setIsOpen(true)
+            setIsMinimized(false)
+          }}
+          className="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-blue-600 to-teal-500 rounded-full shadow-2xl flex items-center justify-center text-white hover:scale-110 transition-transform z-50 group"
+          aria-label="Open AI Symptom Chatbot"
+        >
+          <FiMessageSquare size={24} />
+          <span
+            className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
+              enabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'
+            }`}
+          />
+          <span className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+            {enabled ? 'Medical AI assistant' : 'Chatbot unavailable'}
+          </span>
+        </button>
+      </>
     )
   }
 

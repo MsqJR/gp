@@ -3,14 +3,16 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db import models
 from datetime import datetime
 from django.utils.dateparse import parse_date
 
 from core.models import WebsiteSetup
-from .models import HospitalProfile, Department, Doctor, DoctorSchedule, Appointment, Page, Block
+from .models import HospitalProfile, Department, Doctor, DoctorSchedule, Appointment, Page, Block, HospitalPhoto
 from .serializers import (
     HospitalProfileSerializer, DepartmentSerializer, DoctorSerializer,
-    DoctorScheduleSerializer, AppointmentSerializer, AppointmentAdminSerializer, PageSerializer, BlockSerializer
+    DoctorScheduleSerializer, AppointmentSerializer, AppointmentAdminSerializer, PageSerializer, BlockSerializer,
+    HospitalPhotoSerializer, HospitalPhotoUpdateOrderSerializer
 )
 from .services.booking_engine import get_available_slots
 from .services.template_service import generate_default_hospital_template
@@ -123,6 +125,80 @@ class AppointmentAdminViewSet(viewsets.ModelViewSet):
         serializer.save(website_setup=doctor.website_setup)
 
 
+class HospitalPhotoViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = HospitalPhotoSerializer
+
+    def get_queryset(self):
+        return HospitalPhoto.objects.filter(
+            website_setup__user=self.request.user,
+            is_active=True
+        ).order_by('display_order', 'created_at')
+
+    def perform_create(self, serializer):
+        website_setup = _get_or_create_website_setup(self.request.user)
+        
+        # Auto-assign display order if not provided
+        if not serializer.validated_data.get('display_order'):
+            max_order = HospitalPhoto.objects.filter(
+                website_setup=website_setup,
+                is_active=True
+            ).aggregate(max_order=models.Max('display_order'))['max_order']
+            next_order = (max_order or 0) + 1
+            serializer.save(website_setup=website_setup, display_order=next_order)
+        else:
+            serializer.save(website_setup=website_setup)
+
+    def perform_update(self, serializer):
+        # Clear image_url if new image is uploaded
+        if self.request.FILES.get('image'):
+            serializer.save(image_url='')
+        else:
+            serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        # Soft delete by setting is_active to False
+        instance = self.get_object()
+        instance.is_active = False
+        instance.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['post'])
+    def update_order(self, request):
+        """Update the display order of multiple photos."""
+        serializer = HospitalPhotoUpdateOrderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        photo_ids = serializer.validated_data['photo_ids']
+        website_setup = _get_or_create_website_setup(request.user)
+        
+        # Validate that all photos belong to the user
+        photos = HospitalPhoto.objects.filter(
+            id__in=photo_ids,
+            website_setup=website_setup,
+            is_active=True
+        )
+        
+        if len(photos) != len(photo_ids):
+            return Response(
+                {'error': 'Some photos not found or do not belong to you'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update display order
+        with transaction.atomic():
+            for index, photo_id in enumerate(photo_ids):
+                HospitalPhoto.objects.filter(id=photo_id).update(display_order=index + 1)
+        
+        # Return updated photos
+        updated_photos = HospitalPhoto.objects.filter(
+            website_setup=website_setup,
+            is_active=True
+        ).order_by('display_order', 'created_at')
+        
+        return Response(self.get_serializer(updated_photos, many=True).data)
+
+
 # Public APIs
 class PublicHospitalViewSet(viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
@@ -166,6 +242,17 @@ class PublicHospitalViewSet(viewsets.ViewSet):
             return Response({'error': 'subdomain required'}, status=status.HTTP_400_BAD_REQUEST)
         doctors = Doctor.objects.filter(website_setup=website_setup, is_active=True)
         return Response(DoctorSerializer(doctors, many=True).data)
+
+    @action(detail=False, methods=['get'])
+    def photos(self, request):
+        website_setup = self.get_website_setup(request)
+        if not website_setup:
+            return Response({'error': 'subdomain required'}, status=status.HTTP_400_BAD_REQUEST)
+        photos = HospitalPhoto.objects.filter(
+            website_setup=website_setup, 
+            is_active=True
+        ).order_by('display_order', 'created_at')
+        return Response(HospitalPhotoSerializer(photos, many=True, context={'request': request}).data)
 
 
 class BookingViewSet(viewsets.ViewSet):

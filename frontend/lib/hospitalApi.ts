@@ -1,23 +1,13 @@
+import { API_BASE_URL } from '@/lib/api'
 import {
     HospitalPage,
     Doctor,
     Department,
     AvailableSlotsResponse,
     Appointment,
-    HospitalProfile
+    HospitalProfile,
+    HospitalPhoto
 } from '@/types/hospital';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-
-export async function getHospitalProfile(subdomain: string): Promise<HospitalProfile | null> {
-    const res = await fetch(`${API_BASE}/api/hospital/public/profile/?subdomain=${subdomain}`, {
-        next: { revalidate: 60 }
-    });
-    if (!res.ok) {
-        return null;
-    }
-    return res.json();
-}
 
 export interface HospitalBusinessInfo {
     name?: string | null;
@@ -25,6 +15,53 @@ export interface HospitalBusinessInfo {
     contact_email: string;
     address: string;
     working_hours: Record<string, { open: string; close: string; closed: boolean }>;
+}
+
+interface ApiResponse<T> {
+  data?: T
+  error?: string
+  status?: number
+}
+
+async function parseJson<T>(response: Response): Promise<ApiResponse<T>> {
+  try {
+    if (response.status === 204) {
+      return { data: undefined as T, status: 204 }
+    }
+    const data = await response.json()
+    if (!response.ok) {
+      return { 
+        error: data.detail || data.error || `Request failed with status ${response.status}`, 
+        status: response.status 
+      }
+    }
+    return { data, status: response.status }
+  } catch (error) {
+    return { 
+      error: error instanceof Error ? error.message : 'An unexpected error occurred', 
+      status: response.status 
+    }
+  }
+}
+
+function normalizeList<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[]
+  if (data && typeof data === 'object' && 'results' in data && Array.isArray((data as any).results)) {
+    return (data as any).results as T[]
+  }
+  return []
+}
+
+// ─── Named Exports for booking/profile ──────────────────────────────────────────
+
+export async function getHospitalProfile(subdomain: string): Promise<HospitalProfile | null> {
+    const res = await fetch(`${API_BASE_URL}/hospital/public/profile/?subdomain=${encodeURIComponent(subdomain)}`, {
+        next: { revalidate: 60 }
+    });
+    if (!res.ok) {
+        return null;
+    }
+    return res.json();
 }
 
 export async function getHospitalBusinessInfo(subdomain: string): Promise<HospitalBusinessInfo | null> {
@@ -40,8 +77,8 @@ export async function getHospitalBusinessInfo(subdomain: string): Promise<Hospit
 }
 
 export async function getHospitalPages(subdomain: string): Promise<HospitalPage[]> {
-    const res = await fetch(`${API_BASE}/api/hospital/public/pages/?subdomain=${subdomain}`, {
-        next: { revalidate: 60 } // Cache for 60 seconds
+    const res = await fetch(`${API_BASE_URL}/hospital/public/pages/?subdomain=${encodeURIComponent(subdomain)}`, {
+        next: { revalidate: 60 }
     });
     if (!res.ok) {
         if (res.status === 404 || res.status === 400) return [];
@@ -51,30 +88,32 @@ export async function getHospitalPages(subdomain: string): Promise<HospitalPage[
 }
 
 export async function getHospitalDoctors(subdomain: string): Promise<Doctor[]> {
-    const res = await fetch(`${API_BASE}/api/hospital/public/doctors/?subdomain=${subdomain}`, {
+    const res = await fetch(`${API_BASE_URL}/hospital/public/doctors/?subdomain=${encodeURIComponent(subdomain)}`, {
         next: { revalidate: 60 }
     });
     if (!res.ok) {
         if (res.status === 404 || res.status === 400) return [];
         throw new Error('Failed to fetch doctors');
     }
-    return res.json();
+    const data = await res.json();
+    return normalizeList<Doctor>(data);
 }
 
 export async function getHospitalDepartments(subdomain: string): Promise<Department[]> {
-    const res = await fetch(`${API_BASE}/api/hospital/public/departments/?subdomain=${subdomain}`, {
+    const res = await fetch(`${API_BASE_URL}/hospital/public/departments/?subdomain=${encodeURIComponent(subdomain)}`, {
         next: { revalidate: 60 }
     });
     if (!res.ok) {
         if (res.status === 404 || res.status === 400) return [];
         throw new Error('Failed to fetch departments');
     }
-    return res.json();
+    const data = await res.json();
+    return normalizeList<Department>(data);
 }
 
 export async function getAvailableSlots(doctorId: string, date: string): Promise<AvailableSlotsResponse> {
-    const res = await fetch(`${API_BASE}/api/hospital/booking/available_slots/?doctor_id=${doctorId}&date=${date}`, {
-        cache: 'no-store' // Slots must be real-time
+    const res = await fetch(`${API_BASE_URL}/hospital/booking/available_slots/?doctor_id=${encodeURIComponent(doctorId)}&date=${encodeURIComponent(date)}`, {
+        cache: 'no-store'
     });
     if (!res.ok) {
         if (res.status === 404 || res.status === 400) return { slots: [] };
@@ -91,7 +130,7 @@ export async function createAppointment(data: {
     patient_email: string;
     patient_phone: string;
 }): Promise<Appointment | { error: string; status: number }> {
-    const res = await fetch(`${API_BASE}/api/hospital/booking/create_appointment/`, {
+    const res = await fetch(`${API_BASE_URL}/hospital/booking/create_appointment/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -108,4 +147,46 @@ export async function createAppointment(data: {
     }
     
     return res.json();
+}
+
+// ─── Default object export containing ApiResponse types for newer components ────
+
+export const hospitalApi = {
+  async getProfile(subdomain: string): Promise<ApiResponse<HospitalProfile>> {
+    const response = await fetch(`${API_BASE_URL}/hospital/public/profile/?subdomain=${encodeURIComponent(subdomain)}`, {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    return parseJson<HospitalProfile>(response);
+  },
+
+  async getDepartments(subdomain: string): Promise<ApiResponse<Department[]>> {
+    const response = await fetch(`${API_BASE_URL}/hospital/public/departments/?subdomain=${encodeURIComponent(subdomain)}`, {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    const parsed = await parseJson<unknown>(response);
+    if (!parsed.data) return { error: parsed.error, status: parsed.status };
+    return { data: normalizeList<Department>(parsed.data), status: parsed.status };
+  },
+
+  async getDoctors(subdomain: string): Promise<ApiResponse<Doctor[]>> {
+    const response = await fetch(`${API_BASE_URL}/hospital/public/doctors/?subdomain=${encodeURIComponent(subdomain)}`, {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    const parsed = await parseJson<unknown>(response);
+    if (!parsed.data) return { error: parsed.error, status: parsed.status };
+    return { data: normalizeList<Doctor>(parsed.data), status: parsed.status };
+  },
+
+  async getPhotos(subdomain: string): Promise<ApiResponse<HospitalPhoto[]>> {
+    const response = await fetch(`${API_BASE_URL}/hospital/public/photos/?subdomain=${encodeURIComponent(subdomain)}`, {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    const parsed = await parseJson<unknown>(response);
+    if (!parsed.data) return { error: parsed.error, status: parsed.status };
+    return { data: normalizeList<HospitalPhoto>(parsed.data), status: parsed.status };
+  },
 }

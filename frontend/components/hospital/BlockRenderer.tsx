@@ -10,6 +10,7 @@ import TextBlock from './blocks/TextBlock';
 import ImageBlock from './blocks/ImageBlock';
 import ContactBlock from './blocks/ContactBlock';
 import ContactBlockWrapper from './blocks/ContactBlockWrapper';
+import { HospitalGalleryBlock } from './blocks/HospitalGalleryBlock';
 
 function UnsupportedBlock({ type }: { type: string }) {
     const isDev = process.env.NODE_ENV === 'development';
@@ -37,6 +38,7 @@ export default function BlockRenderer({ blocks, subdomain }: BlockRendererProps)
 
     // Sort blocks by order just in case they aren't sorted from backend
     const sortedBlocks = [...blocks].sort((a, b) => a.order - b.order);
+    const hasDepartmentsBlock = sortedBlocks.some(block => block.type === 'DEPARTMENTS_BLOCK');
 
     return (
         <>
@@ -49,7 +51,12 @@ export default function BlockRenderer({ blocks, subdomain }: BlockRendererProps)
                     case 'DOCTORS_LIST_BLOCK':
                         return <DoctorsListBlock key={block.id} settings={safeSettings} subdomain={subdomain} />;
                     case 'DEPARTMENTS_BLOCK':
-                        return <DepartmentsBlock key={block.id} settings={safeSettings} subdomain={subdomain} />;
+                        return (
+                            <React.Fragment key={block.id}>
+                                <DepartmentsBlock settings={safeSettings} subdomain={subdomain} />
+                                <HospitalGalleryBlock subdomain={subdomain} />
+                            </React.Fragment>
+                        );
                     case 'BOOKING_FORM_BLOCK':
                         return <BookingFormBlock key={block.id} settings={safeSettings} subdomain={subdomain} />;
                     case 'BOOKING_BUTTON_BLOCK':
@@ -67,6 +74,7 @@ export default function BlockRenderer({ blocks, subdomain }: BlockRendererProps)
                         return <UnsupportedBlock key={block.id} type={block.type} />;
                 }
             })}
+            {!hasDepartmentsBlock && <HospitalGalleryBlock subdomain={subdomain} />}
         </>
     );
 }
