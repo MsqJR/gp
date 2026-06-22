@@ -1,6 +1,9 @@
 import json
 import os
+from typing import Optional
+
 import requests
+from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from rag_model.vector_store import VectorStore
@@ -23,12 +26,14 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('source', nargs='?', default=None, help='Path to a text file or JSONL with a "text" field. If omitted, data is fetched from OpenFDA API.')
-        parser.add_argument('--index-dir', default='backend/rag_model/data', help='Directory to store index and metadata')
+        parser.add_argument('--index-dir', default=None, help='Directory to store index and metadata (defaults to rag_model/data/)')
         parser.add_argument('--limit', type=int, default=20, help='Number of records to fetch if fetching from API')
 
     def handle(self, *args, **options):
         src = options['source']
-        index_dir = options['index_dir']
+        index_dir: Optional[str] = options.get('index_dir')
+        if index_dir is None:
+            index_dir = os.path.join(settings.BASE_DIR, 'rag_model', 'data')
         limit = options['limit']
         os.makedirs(index_dir, exist_ok=True)
 

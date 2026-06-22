@@ -28,16 +28,16 @@ class PharmacyTemplatePurchase(models.Model):
         on_delete=models.CASCADE,
         related_name='template_purchases',
     )
-    template_id = models.PositiveIntegerField(db_index=True)
-    template_name = models.CharField(max_length=140)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices)
+    template_id     = models.PositiveIntegerField(db_index=True)
+    template_name   = models.CharField(max_length=140)
+    amount          = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_method  = models.CharField(max_length=20, choices=PaymentMethod.choices)
     transaction_reference = models.CharField(max_length=255, blank=True)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    status       = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
     purchased_at = models.DateTimeField(auto_now_add=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at   = models.DateTimeField(auto_now_add=True)
+    updated_at   = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'pharmacy_template_purchases'

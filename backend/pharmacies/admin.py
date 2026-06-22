@@ -34,7 +34,7 @@ class ProductAdmin(admin.ModelAdmin):
     search_fields = ['name', 'category', 'description']
     readonly_fields = ['id', 'in_stock', 'created_at', 'updated_at']
     list_per_page = 50
-    
+
     fieldsets = (
         ('Basic Information', {
             'fields': ('id', 'pharmacy', 'website_setup', 'name', 'category')
@@ -109,4 +109,3 @@ class PharmacyOrderAdmin(admin.ModelAdmin):
     ]
     inlines = [PharmacyOrderItemInline]
     list_per_page = 50
-

@@ -3,6 +3,7 @@ from core.models import WebsiteSetup
 from .department import Department
 import uuid
 
+
 class Doctor(models.Model):
     """Hospital doctor."""
 
@@ -13,8 +14,8 @@ class Doctor(models.Model):
         related_name='hospital_doctors'
     )
     department = models.ForeignKey(
-        Department, 
-        on_delete=models.CASCADE, 
+        Department,
+        on_delete=models.CASCADE,
         related_name='doctors'
     )
     name = models.CharField(max_length=255)
@@ -23,7 +24,7 @@ class Doctor(models.Model):
     image = models.ImageField(upload_to='doctor_images/', null=True, blank=True)
     image_url = models.URLField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -32,6 +33,7 @@ class Doctor(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.specialty})"
+
 
 class DoctorSchedule(models.Model):
     """Weekly schedule for a doctor with support for specific dates."""

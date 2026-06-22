@@ -9,11 +9,12 @@ from django.utils.dateparse import parse_date
 from core.models import WebsiteSetup
 from .models import HospitalProfile, Department, Doctor, DoctorSchedule, Appointment, Page, Block
 from .serializers import (
-    HospitalProfileSerializer, DepartmentSerializer, DoctorSerializer, 
+    HospitalProfileSerializer, DepartmentSerializer, DoctorSerializer,
     DoctorScheduleSerializer, AppointmentSerializer, AppointmentAdminSerializer, PageSerializer, BlockSerializer
 )
 from .services.booking_engine import get_available_slots
 from .services.template_service import generate_default_hospital_template
+
 
 def _get_or_create_website_setup(user):
     website_setup, _ = WebsiteSetup.objects.get_or_create(
@@ -21,6 +22,7 @@ def _get_or_create_website_setup(user):
         defaults={'subdomain': f"{user.email.split('@')[0]}-hospital" if user.email else "my-hospital"}
     )
     return website_setup
+
 
 # Admin APIs
 class HospitalProfileViewSet(viewsets.ModelViewSet):
@@ -196,13 +198,13 @@ class BookingViewSet(viewsets.ViewSet):
         doctor_id = request.data.get('doctor_id')
         start_datetime_str = request.data.get('start_datetime')
         end_datetime_str = request.data.get('end_datetime')
-        
+
         patient_name = request.data.get('patient_name')
         patient_email = request.data.get('patient_email')
         patient_phone = request.data.get('patient_phone')
 
         from django.core.exceptions import ValidationError
-        
+
         try:
             doctor = Doctor.objects.get(id=doctor_id, is_active=True)
         except (Doctor.DoesNotExist, ValidationError):
@@ -238,10 +240,10 @@ class BookingViewSet(viewsets.ViewSet):
                     end_datetime=end_datetime,
                     status=Appointment.Status.PENDING
                 )
-                
+
             serializer = AppointmentSerializer(appointment)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        
+
         except IntegrityError:
             return Response({'error': 'Double booking prevented'}, status=status.HTTP_409_CONFLICT)
         except Exception as e:

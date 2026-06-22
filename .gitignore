@@ -71,6 +71,7 @@ __pycache__/
 *$py.class
 .Python
 
+/myenv
 /backend/env/
 /backend/venv/
 /backend/ENV/
@@ -88,3 +89,14 @@ __pycache__/
 ####################
 frontend/package-lock.json
 backend/collection.json
+
+
+
+
+
+
+backend/.specify
+backend/.opencode
+backend/.agents
+backend/newfile.md
+backend/specs/

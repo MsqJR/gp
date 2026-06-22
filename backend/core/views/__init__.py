@@ -8,6 +8,8 @@ from .auth import (
     validate_password_reset_token,
     reset_password,
     get_current_user,
+    google_login,
+    onboarding,
 )
 from .business_info import BusinessInfoViewSet
 from .chatbot import ChatbotAPIView
@@ -23,6 +25,8 @@ __all__ = [
     'validate_password_reset_token',
     'reset_password',
     'get_current_user',
+    'google_login',
+    'onboarding',
     'BusinessInfoViewSet',
     'ChatbotAPIView',
     'WebsiteSetupViewSet',

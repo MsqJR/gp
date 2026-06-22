@@ -7,7 +7,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from rest_framework import permissions, status
+from rest_framework import permissions, serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.exceptions import TokenError
@@ -277,3 +277,113 @@ def reset_password(request):
         {'message': 'Password reset successful. You can now log in with your new password.'},
         status=status.HTTP_200_OK,
     )
+
+
+class GoogleLoginSerializer(serializers.Serializer):
+    id_token = serializers.CharField(required=True)
+
+
+class OnboardingSerializer(serializers.Serializer):
+    business_type = serializers.ChoiceField(choices=['hospital', 'pharmacy'])
+    subdomain = serializers.CharField(max_length=255)
+    business_name = serializers.CharField(max_length=255)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def google_login(request):
+    serializer = GoogleLoginSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response({'error': 'id_token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    id_token = serializer.validated_data['id_token']
+    client_id = getattr(settings, 'GOOGLE_OAUTH2_CLIENT_ID', None)
+
+    try:
+        from google.oauth2 import id_token as google_id_token
+        from google.auth.transport import requests as google_requests
+        id_info = google_id_token.verify_oauth2_token(id_token, google_requests.Request(), client_id)
+    except Exception:
+        return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
+
+    email = id_info.get('email', '')
+    name = id_info.get('name', '')
+    google_sub = id_info.get('sub', '')
+
+    if not email:
+        return Response({'error': 'Email not provided by Google.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    user_model = get_user_model()
+    user = user_model.objects.filter(google_oauth_id=google_sub).first()
+
+    if not user:
+        user = user_model.objects.filter(email__iexact=email).first()
+        if user:
+            user.google_oauth_id = google_sub
+            user.save(update_fields=['google_oauth_id', 'updated_at'])
+        else:
+            username = email.split('@')[0]
+            base_username = username
+            counter = 1
+            while user_model.objects.filter(username=username).exists():
+                username = f"{base_username}{counter}"
+                counter += 1
+
+            user = user_model.objects.create_user(
+                username=username,
+                email=email,
+                name=name or email.split('@')[0],
+                google_oauth_id=google_sub,
+                is_onboarding_completed=False,
+                business_type='',
+            )
+
+    refresh = RefreshToken.for_user(user)
+    return Response({
+        'access': str(refresh.access_token),
+        'refresh': str(refresh),
+        'user': UserSerializer(user, context={'request': request}).data,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def onboarding(request):
+    serializer = OnboardingSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    business_type = serializer.validated_data['business_type']
+    subdomain = serializer.validated_data['subdomain']
+    business_name = serializer.validated_data['business_name']
+
+    if WebsiteSetup.objects.filter(subdomain__iexact=subdomain).exclude(user=request.user).exists():
+        return Response({'error': 'Subdomain is already taken'}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = request.user
+    user.business_type = business_type
+    user.is_onboarding_completed = True
+    user.save(update_fields=['business_type', 'is_onboarding_completed', 'updated_at'])
+
+    website_setup, created = WebsiteSetup.objects.get_or_create(
+        user=user,
+        defaults={'subdomain': subdomain},
+    )
+    if not created:
+        website_setup.subdomain = subdomain
+        website_setup.save(update_fields=['subdomain', 'updated_at'])
+
+    if business_type == 'hospital':
+        from hospitals.models.profile import HospitalProfile
+        from hospitals.services.template_service import generate_default_hospital_template
+        HospitalProfile.objects.get_or_create(
+            website_setup=website_setup,
+            defaults={'name': business_name},
+        )
+        generate_default_hospital_template(website_setup)
+
+    return Response({
+        'status': 'success',
+        'message': 'Onboarding completed successfully.',
+        'website_setup_id': str(website_setup.id),
+    })

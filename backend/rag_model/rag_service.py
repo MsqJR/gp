@@ -1,5 +1,8 @@
+import os
 import re
-from typing import List
+from typing import List, Optional
+
+from django.conf import settings
 
 from rag_model.local_models import LocalModelClient
 from rag_model.vector_store import VectorStore
@@ -11,7 +14,9 @@ def _token_set(text: str) -> set:
 
 
 class RAGService:
-    def __init__(self, *, index_dir: str = 'backend/rag_model/data'):
+    def __init__(self, *, index_dir: Optional[str] = None):
+        if index_dir is None:
+            index_dir = os.path.join(settings.BASE_DIR, 'rag_model', 'data')
         self.lm = LocalModelClient()
         self.store = VectorStore(index_dir=index_dir)
 

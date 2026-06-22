@@ -25,8 +25,6 @@ from pharmacies.google_sheet import (
     GoogleSheetAccessError,
     GoogleSheetWriteError,
     fetch_google_sheet_csv,
-    google_sheets_write_configured,
-    push_products_to_google_sheet,
     get_service_account_email,
     pharmacy_sheet_push_available,
     push_products_to_connected_sheet,
@@ -1117,12 +1115,12 @@ class ProductViewSet(viewsets.ModelViewSet):
         """Get products grouped by category"""
         products = self.get_queryset().order_by('category', 'name')
         categories = {}
-        
+
         for product in products:
             if product.category not in categories:
                 categories[product.category] = []
             categories[product.category].append(ProductSerializer(product, context={'request': request}).data)
-        
+
         return Response(categories)
 
 
@@ -1383,12 +1381,12 @@ class PharmacyOrderViewSet(viewsets.ReadOnlyModelViewSet):
             first_item = order.items.first()
             payload.append(
                 {
-                    'id': str(order.id),
-                    'order_number': order.order_number,
-                    'patient_name': order.patient_name,
-                    'status': order.status,
-                    'created_at': order.created_at,
-                    'first_product': first_item.product_name if first_item else '',
+                    'id'            : str(order.id),
+                    'order_number'  : order.order_number,
+                    'patient_name'  : order.patient_name,
+                    'status'        : order.status,
+                    'created_at'    : order.created_at,
+                    'first_product' : first_item.product_name if first_item else '',
                 }
             )
 

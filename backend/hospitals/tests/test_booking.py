@@ -5,6 +5,7 @@ from core.models import User, WebsiteSetup
 from hospitals.models import HospitalProfile, Department, Doctor, DoctorSchedule, Appointment
 from hospitals.services.booking_engine import get_available_slots
 
+
 class HospitalModuleTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
@@ -32,13 +33,11 @@ class HospitalModuleTests(TestCase):
             specialty='Cardiologist'
         )
 
-        # Target date for testing (a Monday)
-        self.test_date = datetime.date(2025, 1, 6) # Jan 6, 2025 is a Monday
-        
-        # Schedule: 09:00 to 11:00, 30 min slots (4 slots)
+        self.test_date = datetime.date(2025, 1, 6)
+
         DoctorSchedule.objects.create(
             doctor=self.doctor,
-            day_of_week=0, # Monday
+            day_of_week=0,
             start_time=datetime.time(9, 0),
             end_time=datetime.time(11, 0),
             slot_duration_minutes=30
@@ -46,21 +45,18 @@ class HospitalModuleTests(TestCase):
 
     def test_1_slot_generation(self):
         slots = get_available_slots(self.doctor, self.test_date)
-        
+
         self.assertEqual(len(slots), 4)
-        
-        # Check first slot
+
         first_slot = slots[0]
         self.assertEqual(first_slot['start_datetime'].time(), datetime.time(9, 0))
         self.assertEqual(first_slot['end_datetime'].time(), datetime.time(9, 30))
 
-        # Check last slot
         last_slot = slots[-1]
         self.assertEqual(last_slot['start_datetime'].time(), datetime.time(10, 30))
         self.assertEqual(last_slot['end_datetime'].time(), datetime.time(11, 0))
 
     def test_2_booking_and_slot_reduction(self):
-        # Book the first slot
         start_dt = timezone.make_aware(datetime.datetime.combine(self.test_date, datetime.time(9, 0)))
         end_dt = timezone.make_aware(datetime.datetime.combine(self.test_date, datetime.time(9, 30)))
 
@@ -75,12 +71,10 @@ class HospitalModuleTests(TestCase):
         )
 
         slots = get_available_slots(self.doctor, self.test_date)
-        # Should now have 3 slots instead of 4
         self.assertEqual(len(slots), 3)
         self.assertEqual(slots[0]['start_datetime'].time(), datetime.time(9, 30))
 
     def test_3_double_booking_prevention(self):
-        # Book the first slot
         start_dt = timezone.make_aware(datetime.datetime.combine(self.test_date, datetime.time(9, 0)))
         end_dt = timezone.make_aware(datetime.datetime.combine(self.test_date, datetime.time(9, 30)))
 
@@ -94,7 +88,6 @@ class HospitalModuleTests(TestCase):
             end_datetime=end_dt
         )
 
-        # Attempt to book the same exact slot
         from django.db import IntegrityError
         with self.assertRaises(IntegrityError):
             Appointment.objects.create(
@@ -108,44 +101,37 @@ class HospitalModuleTests(TestCase):
             )
 
     def test_4_schedule_conflict(self):
-        # Test a day without schedule (e.g. Tuesday)
         tuesday_date = datetime.date(2025, 1, 7)
         slots = get_available_slots(self.doctor, tuesday_date)
         self.assertEqual(len(slots), 0)
 
     def test_5_multi_slot_day(self):
-        # Add a second schedule on the same day (Monday evening)
         DoctorSchedule.objects.create(
             doctor=self.doctor,
-            day_of_week=0, # Monday
+            day_of_week=0,
             start_time=datetime.time(14, 0),
             end_time=datetime.time(15, 0),
             slot_duration_minutes=30
         )
-        
+
         slots = get_available_slots(self.doctor, self.test_date)
-        
-        # 4 slots from morning, 2 slots from evening
+
         self.assertEqual(len(slots), 6)
-        
-        # Check an evening slot
+
         self.assertEqual(slots[4]['start_datetime'].time(), datetime.time(14, 0))
 
     def test_6_concurrency_booking(self):
-        # Using the API to test concurrency lock
-        # Since standard Django TestCase is single-threaded, we can test the explicit logic using the View
         from rest_framework.test import APIClient
         from django.urls import reverse
-        import threading
-        
+
         client1 = APIClient()
         client2 = APIClient()
-        
+
         url = reverse('hospital-booking-create-appointment')
-        
+
         start_dt = timezone.make_aware(datetime.datetime.combine(self.test_date, datetime.time(9, 0)))
         end_dt = timezone.make_aware(datetime.datetime.combine(self.test_date, datetime.time(9, 30)))
-        
+
         payload1 = {
             'doctor_id': self.doctor.id,
             'start_datetime': start_dt.isoformat(),
@@ -154,7 +140,7 @@ class HospitalModuleTests(TestCase):
             'patient_email': 't1@test.com',
             'patient_phone': '1'
         }
-        
+
         payload2 = {
             'doctor_id': self.doctor.id,
             'start_datetime': start_dt.isoformat(),
@@ -163,11 +149,9 @@ class HospitalModuleTests(TestCase):
             'patient_email': 't2@test.com',
             'patient_phone': '2'
         }
-        
-        # Run sequentially but validating the explicit overlap check in view
+
         res1 = client1.post(url, payload1, format='json')
         self.assertEqual(res1.status_code, 201)
-        
+
         res2 = client2.post(url, payload2, format='json')
-        # Expecting conflict since overlap check fails
         self.assertEqual(res2.status_code, 409)

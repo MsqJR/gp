@@ -1,8 +1,9 @@
 import json
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 import numpy as np
+from django.conf import settings
 
 try:
     import faiss
@@ -12,7 +13,9 @@ except Exception:
 
 
 class VectorStore:
-    def __init__(self, index_dir: str = 'backend/rag_model/data', dim: int = 384):
+    def __init__(self, index_dir: Optional[str] = None, dim: int = 384):
+        if index_dir is None:
+            index_dir = os.path.join(settings.BASE_DIR, 'rag_model', 'data')
         self.index_dir = index_dir
         os.makedirs(self.index_dir, exist_ok=True)
         self.index_path = os.path.join(self.index_dir, 'faiss.index')

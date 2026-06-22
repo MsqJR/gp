@@ -1,3 +1,7 @@
+"""
+Standalone script to verify Phi-3-mini model loading.
+Run directly: python rag_model/tests/test_model_loading.py
+"""
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 

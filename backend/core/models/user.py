@@ -13,8 +13,11 @@ class User(AbstractUser):
         choices=[
             ('hospital', 'Hospital'),
             ('pharmacy', 'Pharmacy'),
-        ]
+        ],
+        blank=True,
     )
+    google_oauth_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    is_onboarding_completed = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -1,5 +1,6 @@
 from hospitals.models import Page, Block
 
+
 def generate_default_hospital_template(website_setup):
     """
     Generates hardcoded templates (Pages and Blocks) for a new Hospital Profile.
@@ -19,11 +20,11 @@ def generate_default_hospital_template(website_setup):
         type=Block.BlockType.HERO_BLOCK,
         order=1,
         settings={
-            "headline": "Your Health, Our Priority",
-            "subheadline": "Experience world-class medical care with modern facilities and compassionate specialists.",
-            "badge_text": "Premium Healthcare",
-            "button_text": "Book an Appointment",
-            "button_link": "/booking",
+            "headline"             : "Your Health, Our Priority",
+            "subheadline"          : "Experience world-class medical care with modern facilities and compassionate specialists.",
+            "badge_text"           : "Premium Healthcare",
+            "button_text"          : "Book an Appointment",
+            "button_link"          : "/booking",
             "secondary_button_text": "Meet Our Doctors",
             "secondary_button_link": "/#doctors"
         }

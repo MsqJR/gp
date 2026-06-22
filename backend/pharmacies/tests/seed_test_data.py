@@ -1,3 +1,7 @@
+"""
+Standalone script to seed test product data for pharmacy CSV import testing.
+Run directly: python pharmacies/tests/test_csv_import_seeder.py
+"""
 import os
 import django
 
@@ -11,7 +15,6 @@ from core.models import WebsiteSetup
 User = get_user_model()
 
 def main():
-    # Get or create a test user
     user, created = User.objects.get_or_create(
         email='test@pharmacy.com',
         defaults={
@@ -29,13 +32,11 @@ def main():
     else:
         print(f"Using existing user: {user.email}")
 
-    # Get or create website setup
     website_setup, _ = WebsiteSetup.objects.get_or_create(
         user=user,
         defaults={'subdomain': 'testpharmacy'},
     )
 
-    # Test product data (simulating CSV import)
     test_products = [
         {
             'name': 'Amoxicillin 500mg Capsules',
@@ -61,7 +62,6 @@ def main():
         )
         print(f"Created: {product.name} - Stock: {product.stock}, In Stock: {product.in_stock}")
 
-    # Verify
     print(f"\nTotal products in database: {Product.objects.count()}")
     products = Product.objects.filter(website_setup=website_setup)
     for product in products:

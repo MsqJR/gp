@@ -3,6 +3,7 @@ from core.models import WebsiteSetup
 from .doctor import Doctor
 import uuid
 
+
 class Appointment(models.Model):
     """Patient appointment."""
 
@@ -22,17 +23,17 @@ class Appointment(models.Model):
         on_delete=models.CASCADE,
         related_name='appointments'
     )
-    
+
     patient_name = models.CharField(max_length=255)
     patient_email = models.EmailField()
     patient_phone = models.CharField(max_length=50)
-    
+
     start_datetime = models.DateTimeField()
     end_datetime = models.DateTimeField()
-    
+
     status = models.CharField(
-        max_length=20, 
-        choices=Status.choices, 
+        max_length=20,
+        choices=Status.choices,
         default=Status.PENDING
     )
 

@@ -10,7 +10,7 @@ class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model"""
     class Meta:
         model = User
-        fields = ['id', 'email', 'name', 'business_type', 'created_at']
+        fields = ['id', 'email', 'name', 'business_type', 'google_oauth_id', 'is_onboarding_completed', 'created_at']
         read_only_fields = ['id', 'created_at']
 
 
