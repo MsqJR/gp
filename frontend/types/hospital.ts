@@ -87,6 +87,7 @@ export interface Appointment {
     status: AppointmentStatus;
     doctor: string;
     doctor_name: string;
+    department_name?: string;
     website_setup: string;
     created_at: string;
     updated_at: string;

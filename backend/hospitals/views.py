@@ -8,6 +8,11 @@ from datetime import datetime
 from django.utils.dateparse import parse_date
 
 from core.models import WebsiteSetup
+from core.services.subscription import (
+    get_allowed_features,
+    PLAN_TYPE_STANDARD,
+    PLAN_TYPE_PREMIUM,
+)
 from .models import HospitalProfile, Department, Doctor, DoctorSchedule, Appointment, Page, Block, HospitalPhoto
 from .serializers import (
     HospitalProfileSerializer, DepartmentSerializer, DoctorSerializer,
@@ -44,6 +49,26 @@ class HospitalProfileViewSet(viewsets.ModelViewSet):
 
         if request.method == 'GET':
             return Response(self.get_serializer(profile).data)
+
+        # ── Subscription guard: block customization writes without Premium plan ──
+        _CUSTOMIZATION_FIELDS = {'theme_settings', 'logo'}
+        _ALLOWED_PLANS = {PLAN_TYPE_STANDARD, PLAN_TYPE_PREMIUM}
+        is_customization_write = bool(
+            _CUSTOMIZATION_FIELDS.intersection(request.data.keys())
+            or request.FILES.get('logo')
+        )
+        if is_customization_write:
+            plan_access = get_allowed_features(website_setup)
+            if not plan_access.is_active or plan_access.plan_type not in _ALLOWED_PLANS:
+                return Response(
+                    {
+                        'detail': (
+                            'Website customization requires an active Premium plan. '
+                            'Please upgrade your subscription to save theme or logo changes.'
+                        )
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         serializer = self.get_serializer(profile, data=request.data, partial=request.method in ['PATCH', 'POST'])
         serializer.is_valid(raise_exception=True)

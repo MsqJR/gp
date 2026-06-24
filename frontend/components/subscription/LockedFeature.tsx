@@ -62,7 +62,7 @@ export function LockedFeature({ locked, featureName, children }: LockedFeaturePr
             group-hover:border-primary group-hover:text-primary
             transition-colors shadow-sm
           ">
-            Available in higher plans
+            Requires Premium Plan to unlock
           </span>
         </button>
       </div>

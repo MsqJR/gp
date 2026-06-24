@@ -811,10 +811,10 @@ function CustomizationContent() {
     }, 1000)
   }
 
-  const { hasFeature, planType, isActive, loading: subLoading } = useSubscription()
+  const { planType, isActive, loading: subLoading } = useSubscription()
 
-  const canCustomTheme = hasFeature('custom_theme')
-  const canChatbot = hasFeature('ai_chatbot')
+  // "Premium Plan" in the UI maps to backend key 'STANDARD'
+  const canCustomize = isActive && planType === 'STANDARD'
 
   useEffect(() => {
     loadProfile()
@@ -955,25 +955,33 @@ function CustomizationContent() {
         </div>
       )}
 
-      {/* ── Plan feature badges ── */}
-      {!subLoading && (
-        <div className="mb-6 rounded-xl border border-neutral-border bg-neutral-light px-5 py-3">
-          <p className="text-xs font-semibold text-neutral-gray uppercase tracking-wide mb-2">Plan Feature Access</p>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { key: 'custom_theme', label: 'Custom Theme', ok: canCustomTheme },
-              { key: 'ai_chatbot', label: 'AI Chatbot', ok: canChatbot },
-            ].map(({ key, label, ok }) => (
-              <span
-                key={key}
-                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                  ok ? 'border-green-200 bg-green-50 text-green-700' : 'border-neutral-border bg-white text-neutral-gray'
-                }`}
-              >
-                {ok ? '✓' : '🔒'} {label}
-              </span>
-            ))}
+      {/* ── Plan access banner ── */}
+      {!subLoading && !canCustomize && !isActive && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 flex items-start gap-3">
+          <span className="text-amber-500 text-lg mt-0.5">🔒</span>
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Premium Plan Required</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              You don&apos;t have an active subscription. Purchase the <strong>Premium Plan</strong> to unlock full customization of your hospital&apos;s public website and AI chatbot.
+            </p>
           </div>
+        </div>
+      )}
+      {!subLoading && !canCustomize && isActive && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 flex items-start gap-3">
+          <span className="text-amber-500 text-lg mt-0.5">🔒</span>
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Premium Plan Required</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Your current plan doesn&apos;t include website customization. Upgrade to the <strong>Premium Plan</strong> to unlock full customization of your hospital&apos;s public website and AI chatbot.
+            </p>
+          </div>
+        </div>
+      )}
+      {!subLoading && canCustomize && (
+        <div className="mb-6 rounded-xl border border-green-200 bg-green-50 px-5 py-3 flex items-center gap-2">
+          <span className="text-green-600">✓</span>
+          <p className="text-xs font-semibold text-green-700">All customization features are unlocked with your active Premium plan.</p>
         </div>
       )}
 
@@ -983,7 +991,7 @@ function CustomizationContent() {
         <div className="flex-1 min-w-0 space-y-4">
 
           {/* ── PRESET THEMES ── */}
-          <LockedFeature locked={!canCustomTheme} featureName="Custom UI Theme">
+          <LockedFeature locked={!canCustomize} featureName="Website Customization">
             <div className="rounded-xl border border-neutral-border bg-white p-5 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -1000,7 +1008,7 @@ function CustomizationContent() {
                     key={preset.name}
                     type="button"
                     onClick={() => handlePresetApply(preset.theme)}
-                    disabled={!canCustomTheme}
+                    disabled={!canCustomize}
                     className="group flex items-center gap-2.5 rounded-lg border border-neutral-border px-3 py-2.5 text-left hover:border-primary hover:bg-primary/5 transition-all disabled:cursor-not-allowed"
                   >
                     <div className="flex -space-x-1 shrink-0">
@@ -1026,7 +1034,7 @@ function CustomizationContent() {
 
 
           {/* ── TYPOGRAPHY ── */}
-          <LockedFeature locked={!canCustomTheme} featureName="Custom UI Theme">
+          <LockedFeature locked={!canCustomize} featureName="Website Customization">
             <div className="rounded-xl border border-neutral-border bg-white p-5 shadow-sm">
               <SectionHeader
                 icon={<FiType size={16} />}
@@ -1048,7 +1056,7 @@ function CustomizationContent() {
                           key={font.value}
                           type="button"
                           onClick={() => handleThemeChange('fontFamily', font.value)}
-                          disabled={!canCustomTheme}
+                          disabled={!canCustomize}
                           className={`rounded-lg border-2 px-3 py-2.5 text-left transition-all disabled:cursor-not-allowed ${
                             theme.fontFamily === font.value
                               ? 'border-primary bg-primary/5'
@@ -1076,7 +1084,7 @@ function CustomizationContent() {
                           key={size.value}
                           type="button"
                           onClick={() => handleThemeChange('fontSize', size.value)}
-                          disabled={!canCustomTheme}
+                          disabled={!canCustomize}
                           className={`rounded-lg border-2 px-3 py-2 text-xs font-medium transition-all disabled:cursor-not-allowed ${
                             theme.fontSize === size.value
                               ? 'border-primary bg-primary/5 text-primary'
@@ -1100,7 +1108,7 @@ function CustomizationContent() {
                           key={style}
                           type="button"
                           onClick={() => handleThemeChange('fontStyle', style)}
-                          disabled={!canCustomTheme}
+                          disabled={!canCustomize}
                           className={`flex-1 rounded-lg border-2 px-3 py-2 text-xs font-medium transition-all disabled:cursor-not-allowed capitalize ${
                             theme.fontStyle === style
                               ? 'border-primary bg-primary/5 text-primary'
@@ -1119,7 +1127,7 @@ function CustomizationContent() {
           </LockedFeature>
 
           {/* ── COLORS ── */}
-          <LockedFeature locked={!canCustomTheme} featureName="Custom UI Theme">
+          <LockedFeature locked={!canCustomize} featureName="Website Customization">
             <div className="rounded-xl border border-neutral-border bg-white p-5 shadow-sm">
               <SectionHeader
                 icon={<FiDroplet size={16} />}
@@ -1134,56 +1142,56 @@ function CustomizationContent() {
                     label="Primary (Brand) Color"
                     value={theme.primaryColor}
                     onChange={(v) => handleThemeChange('primaryColor', v)}
-                    disabled={!canCustomTheme}
+                    disabled={!canCustomize}
                     hint="Main accent color used across the site"
                   />
                   <ColorField
                     label="Page Background Color"
                     value={theme.backgroundColor}
                     onChange={(v) => handleThemeChange('backgroundColor', v)}
-                    disabled={!canCustomTheme}
+                    disabled={!canCustomize}
                     hint="Overall page background"
                   />
                   <ColorField
                     label="Card / Surface Color"
                     value={theme.surfaceColor}
                     onChange={(v) => handleThemeChange('surfaceColor', v)}
-                    disabled={!canCustomTheme}
+                    disabled={!canCustomize}
                     hint="Background of cards and panels"
                   />
                   <ColorField
                     label="Section Background Color"
                     value={theme.surfaceAltColor}
                     onChange={(v) => handleThemeChange('surfaceAltColor', v)}
-                    disabled={!canCustomTheme}
+                    disabled={!canCustomize}
                     hint="Alternate section backgrounds"
                   />
                   <ColorField
                     label="Primary Text Color"
                     value={theme.textColor}
                     onChange={(v) => handleThemeChange('textColor', v)}
-                    disabled={!canCustomTheme}
+                    disabled={!canCustomize}
                     hint="Main body and heading text"
                   />
                   <ColorField
                     label="Muted / Secondary Text Color"
                     value={theme.mutedTextColor}
                     onChange={(v) => handleThemeChange('mutedTextColor', v)}
-                    disabled={!canCustomTheme}
+                    disabled={!canCustomize}
                     hint="Descriptions and helper text"
                   />
                   <ColorField
                     label="Link Color"
                     value={theme.linkColor}
                     onChange={(v) => handleThemeChange('linkColor', v)}
-                    disabled={!canCustomTheme}
+                    disabled={!canCustomize}
                     hint="Hyperlinks and interactive text"
                   />
                   <ColorField
                     label="Border / Divider Color"
                     value={theme.borderColor}
                     onChange={(v) => handleThemeChange('borderColor', v)}
-                    disabled={!canCustomTheme}
+                    disabled={!canCustomize}
                     hint="Card borders and dividers"
                   />
                 </div>
@@ -1192,7 +1200,7 @@ function CustomizationContent() {
           </LockedFeature>
 
           {/* ── BUTTON COLORS ── */}
-          <LockedFeature locked={!canCustomTheme} featureName="Custom UI Theme">
+          <LockedFeature locked={!canCustomize} featureName="Website Customization">
             <div className="rounded-xl border border-neutral-border bg-white p-5 shadow-sm">
               <SectionHeader
                 icon={<FiSquare size={16} />}
@@ -1240,19 +1248,19 @@ function CustomizationContent() {
                         label="Background Color"
                         value={theme.buttonPrimaryColor}
                         onChange={(v) => handleThemeChange('buttonPrimaryColor', v)}
-                        disabled={!canCustomTheme}
+                        disabled={!canCustomize}
                       />
                       <ColorField
                         label="Text Color"
                         value={theme.buttonPrimaryTextColor}
                         onChange={(v) => handleThemeChange('buttonPrimaryTextColor', v)}
-                        disabled={!canCustomTheme}
+                        disabled={!canCustomize}
                       />
                       <ColorField
                         label="Hover Background Color"
                         value={theme.buttonPrimaryHoverColor}
                         onChange={(v) => handleThemeChange('buttonPrimaryHoverColor', v)}
-                        disabled={!canCustomTheme}
+                        disabled={!canCustomize}
                         hint="Color when mouse hovers over button"
                       />
                     </div>
@@ -1262,25 +1270,25 @@ function CustomizationContent() {
                         label="Background Color"
                         value={theme.buttonSecondaryColor}
                         onChange={(v) => handleThemeChange('buttonSecondaryColor', v)}
-                        disabled={!canCustomTheme}
+                        disabled={!canCustomize}
                       />
                       <ColorField
                         label="Text Color"
                         value={theme.buttonSecondaryTextColor}
                         onChange={(v) => handleThemeChange('buttonSecondaryTextColor', v)}
-                        disabled={!canCustomTheme}
+                        disabled={!canCustomize}
                       />
                       <ColorField
                         label="Border Color"
                         value={theme.buttonSecondaryBorderColor}
                         onChange={(v) => handleThemeChange('buttonSecondaryBorderColor', v)}
-                        disabled={!canCustomTheme}
+                        disabled={!canCustomize}
                       />
                       <ColorField
                         label="Hover Background Color"
                         value={theme.buttonSecondaryHoverColor}
                         onChange={(v) => handleThemeChange('buttonSecondaryHoverColor', v)}
-                        disabled={!canCustomTheme}
+                        disabled={!canCustomize}
                         hint="Color when mouse hovers over button"
                       />
                     </div>
@@ -1291,7 +1299,7 @@ function CustomizationContent() {
           </LockedFeature>
 
           {/* ── INPUT COLORS ── */}
-          <LockedFeature locked={!canCustomTheme} featureName="Custom UI Theme">
+          <LockedFeature locked={!canCustomize} featureName="Website Customization">
             <div className="rounded-xl border border-neutral-border bg-white p-5 shadow-sm">
               <SectionHeader
                 icon={<FiSliders size={16} />}
@@ -1326,19 +1334,19 @@ function CustomizationContent() {
                       label="Input Background Color"
                       value={theme.inputBackgroundColor}
                       onChange={(v) => handleThemeChange('inputBackgroundColor', v)}
-                      disabled={!canCustomTheme}
+                      disabled={!canCustomize}
                     />
                     <ColorField
                       label="Input Border Color"
                       value={theme.inputBorderColor}
                       onChange={(v) => handleThemeChange('inputBorderColor', v)}
-                      disabled={!canCustomTheme}
+                      disabled={!canCustomize}
                     />
                     <ColorField
                       label="Input Focus / Active Color"
                       value={theme.inputFocusColor}
                       onChange={(v) => handleThemeChange('inputFocusColor', v)}
-                      disabled={!canCustomTheme}
+                      disabled={!canCustomize}
                       hint="Border color when a field is focused"
                     />
                   </div>
@@ -1348,7 +1356,7 @@ function CustomizationContent() {
           </LockedFeature>
 
           {/* ── CORNER STYLE ── */}
-          <LockedFeature locked={!canCustomTheme} featureName="Custom UI Theme">
+          <LockedFeature locked={!canCustomize} featureName="Website Customization">
             <div className="rounded-xl border border-neutral-border bg-white p-5 shadow-sm">
               <SectionHeader
                 icon={<FiLayout size={16} />}
@@ -1365,7 +1373,7 @@ function CustomizationContent() {
                         key={opt.value}
                         type="button"
                         onClick={() => handleThemeChange('borderRadius', opt.value)}
-                        disabled={!canCustomTheme}
+                        disabled={!canCustomize}
                         className={`flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-all disabled:cursor-not-allowed ${
                           theme.borderRadius === opt.value
                             ? 'border-primary bg-primary/5'
@@ -1399,7 +1407,7 @@ function CustomizationContent() {
           </LockedFeature>
 
           {/* ── AI CHATBOT ── */}
-          <LockedFeature locked={!canChatbot} featureName="AI Chatbot">
+          <LockedFeature locked={!canCustomize} featureName="Website Customization">
             <div className="rounded-xl border border-neutral-border bg-white p-5 shadow-sm">
               <SectionHeader
                 icon={<FiMessageSquare size={16} />}
@@ -1420,7 +1428,7 @@ function CustomizationContent() {
                       onChange={(e) => handleThemeChange('chatbotName', e.target.value)}
                       placeholder="e.g. St. Jude Assistant"
                       className="w-full rounded-lg border border-neutral-border px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all disabled:opacity-50"
-                      disabled={!canChatbot}
+                      disabled={!canCustomize}
                     />
                     <p className="mt-1 text-xs text-neutral-gray">Name shown in the chat widget header</p>
                   </div>
@@ -1428,7 +1436,7 @@ function CustomizationContent() {
                     label="Chatbot Accent Color"
                     value={theme.chatbotColor}
                     onChange={(v) => handleThemeChange('chatbotColor', v)}
-                    disabled={!canChatbot}
+                    disabled={!canCustomize}
                     hint="Color of the chatbot bubble and header"
                   />
                   <div className="sm:col-span-2 border-t border-neutral-border pt-5 mt-2">

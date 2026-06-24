@@ -48,15 +48,15 @@ export function UpgradeModal({ open, onClose, featureName }: UpgradeModalProps) 
         </div>
 
         <h2 id="upgrade-modal-title" className="text-xl font-bold text-neutral-dark mb-2">
-          Feature Locked
+          Premium Plan Required
         </h2>
 
         <p className="text-sm text-neutral-gray leading-relaxed mb-6">
           {featureName
-            ? <><span className="font-semibold text-neutral-dark">{featureName}</span> is not included in your current plan.</>
-            : 'This feature is not included in your current plan.'
+            ? <><span className="font-semibold text-neutral-dark">{featureName}</span> requires an active subscription.</>
+            : 'This feature requires an active subscription.'
           }
-          {' '}Please upgrade your subscription to access this feature.
+          {' '}Please purchase the <span className="font-semibold text-neutral-dark">Premium Plan</span> or higher to unlock all website customization features.
         </p>
 
         <div className="flex flex-col gap-3">
@@ -70,7 +70,7 @@ export function UpgradeModal({ open, onClose, featureName }: UpgradeModalProps) 
             "
           >
             <FiArrowUpRight size={16} />
-            Upgrade Plan
+            Purchase Premium Plan
           </Link>
           <Link
             href="/dashboard/hospital/setup"
@@ -81,7 +81,7 @@ export function UpgradeModal({ open, onClose, featureName }: UpgradeModalProps) 
               hover:bg-neutral-light transition-colors
             "
           >
-            View Pricing
+            View Plans & Pricing
           </Link>
         </div>
       </div>

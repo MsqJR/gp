@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import HospitalProfile, Department, Doctor, DoctorSchedule, Appointment, Page, Block, HospitalPhoto
+from core.services.subscription import get_allowed_features, PLAN_TYPE_STANDARD, PLAN_TYPE_PREMIUM
 
 
 class HospitalProfileSerializer(serializers.ModelSerializer):
@@ -43,6 +44,39 @@ class HospitalProfileSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('id', 'website_setup', 'created_at', 'updated_at')
 
+    # ── Subscription guard ────────────────────────────────────────────────────
+
+    _CUSTOMIZATION_FIELDS = {'theme_settings', 'logo'}
+    _ALLOWED_PLANS = {PLAN_TYPE_STANDARD, PLAN_TYPE_PREMIUM}
+
+    def validate(self, attrs):
+        """
+        Block writes to theme_settings or logo unless the hospital has an
+        active Premium (STANDARD) plan or higher.
+        """
+        # Only applies on update (instance is set); skip on create
+        if self.instance is None:
+            return attrs
+
+        customization_keys = self._CUSTOMIZATION_FIELDS.intersection(attrs.keys())
+        if not customization_keys:
+            return attrs  # Not a customization write — allow
+
+        website_setup = getattr(self.instance, 'website_setup', None)
+        if website_setup is None:
+            raise serializers.ValidationError(
+                'Cannot update customization: website setup not found.'
+            )
+
+        plan_access = get_allowed_features(website_setup)
+        if not plan_access.is_active or plan_access.plan_type not in self._ALLOWED_PLANS:
+            raise serializers.ValidationError(
+                'Website customization requires an active Premium plan. '
+                'Please upgrade your subscription to save theme or logo changes.'
+            )
+
+        return attrs
+
 
 class DepartmentSerializer(serializers.ModelSerializer):
     doctor_count = serializers.SerializerMethodField()
@@ -84,6 +118,7 @@ class DoctorSerializer(serializers.ModelSerializer):
 
 class AppointmentSerializer(serializers.ModelSerializer):
     doctor_name = serializers.CharField(source='doctor.name', read_only=True)
+    department_name = serializers.CharField(source='doctor.department.name', read_only=True)
 
     class Meta:
         model = Appointment
@@ -93,6 +128,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
 
 class AppointmentAdminSerializer(serializers.ModelSerializer):
     doctor_name = serializers.CharField(source='doctor.name', read_only=True)
+    department_name = serializers.CharField(source='doctor.department.name', read_only=True)
 
     class Meta:
         model = Appointment
