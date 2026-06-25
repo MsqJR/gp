@@ -24,6 +24,9 @@ class Doctor(models.Model):
     image = models.ImageField(upload_to='doctor_images/', null=True, blank=True)
     image_url = models.URLField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
+    age = models.IntegerField(null=True, blank=True)
+    gender = models.CharField(max_length=50, blank=True)
+    email = models.EmailField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

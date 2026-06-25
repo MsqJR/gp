@@ -153,6 +153,28 @@ export const hospitalAdminApi = {
     return parseJson<Department>(response);
   },
 
+  async updateDepartment(id: string, payload: { name?: string; description?: string }): Promise<ApiResponse<Department>> {
+    const response = await fetch(`${API_BASE_URL}/hospital/admin/departments/${id}/`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+      cache: 'no-store',
+    });
+    return parseJson<Department>(response);
+  },
+
+  async deleteDepartment(id: string): Promise<ApiResponse<void>> {
+    const response = await fetch(`${API_BASE_URL}/hospital/admin/departments/${id}/`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+      cache: 'no-store',
+    });
+    if (response.status === 204) {
+      return { data: undefined, status: 204 };
+    }
+    return parseJson<void>(response);
+  },
+
   // ─── Appointments ──────────────────────────────────────────────────────────
 
   async listAppointments(status?: AppointmentStatus): Promise<ApiResponse<Appointment[]>> {
@@ -287,57 +309,43 @@ export const hospitalAdminApi = {
 
   async syncDoctorWeeklySchedules(doctorId: string, schedules: { day_of_week: number; start_time: string; end_time: string; slot_duration_minutes: number }[]): Promise<void> {
     const hdrs = authHeaders();
+
+    // Step 1: Fetch ALL existing schedules for this doctor
     const response = await fetch(`${API_BASE_URL}/hospital/admin/schedules/?doctor=${doctorId}`, {
       headers: hdrs,
       cache: 'no-store',
     });
     const payload = response.ok ? await response.json() : null;
     const existing = normalizeList<any>(payload);
-    const existingMap = new Map<number, any>(existing.map((s: any) => [s.day_of_week, s]));
-    const requests: Promise<Response>[] = [];
 
-    const desiredDaySet = new Set(schedules.map(s => s.day_of_week));
-    for (const existingSchedule of existing) {
-      if (!desiredDaySet.has(existingSchedule.day_of_week) && existingSchedule.specific_date == null) {
-        requests.push(fetch(`${API_BASE_URL}/hospital/admin/schedules/${existingSchedule.id}/`, {
-          method: 'DELETE',
-          headers: hdrs,
-          cache: 'no-store',
-        }));
-      }
-    }
+    // Step 2: Delete ALL existing weekly (non-specific-date) schedules
+    const deleteRequests = existing
+      .filter((s: any) => s.specific_date == null)
+      .map((s: any) => fetch(`${API_BASE_URL}/hospital/admin/schedules/${s.id}/`, {
+        method: 'DELETE',
+        headers: hdrs,
+        cache: 'no-store',
+      }));
+    await Promise.allSettled(deleteRequests);
 
-    for (const schedule of schedules) {
-      const existingSchedule = existingMap.get(schedule.day_of_week);
-      if (existingSchedule && existingSchedule.specific_date == null) {
-        requests.push(fetch(`${API_BASE_URL}/hospital/admin/schedules/${existingSchedule.id}/`, {
-          method: 'PATCH',
-          headers: hdrs,
-          body: JSON.stringify({
-            start_time: schedule.start_time + ':00',
-            end_time: schedule.end_time + ':00',
-            slot_duration_minutes: schedule.slot_duration_minutes,
-          }),
-          cache: 'no-store',
-        }));
-      } else {
-        requests.push(fetch(`${API_BASE_URL}/hospital/admin/schedules/`, {
-          method: 'POST',
-          headers: hdrs,
-          body: JSON.stringify({
-            doctor: doctorId,
-            day_of_week: schedule.day_of_week,
-            start_time: schedule.start_time + ':00',
-            end_time: schedule.end_time + ':00',
-            slot_duration_minutes: schedule.slot_duration_minutes,
-          }),
-          cache: 'no-store',
-        }));
-      }
-    }
-
-    await Promise.allSettled(requests);
+    // Step 3: Create fresh weekly schedules from the desired list
+    const createRequests = schedules.map(schedule =>
+      fetch(`${API_BASE_URL}/hospital/admin/schedules/`, {
+        method: 'POST',
+        headers: hdrs,
+        body: JSON.stringify({
+          doctor: doctorId,
+          day_of_week: schedule.day_of_week,
+          start_time: schedule.start_time + ':00',
+          end_time: schedule.end_time + ':00',
+          slot_duration_minutes: schedule.slot_duration_minutes,
+        }),
+        cache: 'no-store',
+      })
+    );
+    await Promise.allSettled(createRequests);
   },
+
 
   /** Sync date-specific availability for a doctor */
   async syncDoctorAvailableDates(doctorId: string, dates: { date: string; start_time: string; end_time: string; slot_duration_minutes: number }[]): Promise<void> {

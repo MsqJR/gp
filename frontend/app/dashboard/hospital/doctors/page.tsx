@@ -8,7 +8,7 @@ import { hospitalAdminApi } from '@/lib/hospitalAdminApi';
 import { normalizeCsvImageUrl } from '@/lib/productImage';
 import { normalizeLogoUrl } from '@/lib/storage';
 import type { Department, Doctor } from '@/types/hospital';
-import { FiPlus, FiEdit2, FiTrash2, FiChevronDown, FiChevronRight, FiUpload, FiX, FiCheck, FiAlertCircle } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiChevronDown, FiChevronRight, FiUpload, FiX, FiCheck, FiAlertCircle, FiUser } from 'react-icons/fi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,10 +22,12 @@ interface DoctorFormData {
   department: string;   // department id
   newDeptName: string;  // if creating new dept
   is_active: boolean;
+  age: string;
+  gender: string;
   image: File | null;
   image_url: string;
   imagePreview: string;
-  availabilityType: 'week' | 'month' | 'year';
+  availabilityType: 'week' | 'month' | 'year' | '';
   weeklyDays: number[];
   monthlyMonth: string;
   monthlyDayNumbers: number[];
@@ -54,22 +56,32 @@ interface ImportRow {
 const EMPTY_FORM: DoctorFormData = {
   name: '', title: '', specialty: '', bio: '', email: '',
   experience: '', department: '', newDeptName: '', is_active: true,
+  age: '', gender: '',
   image: null, image_url: '', imagePreview: '',
-  availabilityType: 'week',
-  weeklyDays: [1, 2, 3, 4, 5],
+  availabilityType: '',
+  weeklyDays: [],
   monthlyMonth: new Date().toISOString().slice(0, 7),
   monthlyDayNumbers: [],
-  availabilityStartTime: '09:00',
-  availabilityEndTime: '17:00',
-  availabilitySlotDurationMinutes: 30,
+  availabilityStartTime: '',
+  availabilityEndTime: '',
+  availabilitySlotDurationMinutes: 0,
   availableDates: [],
 };
 
 // ─── Small helpers ────────────────────────────────────────────────────────────
 
 function initials(name: string) {
-  return name.split(' ').slice(0, 2).map(t => t[0]?.toUpperCase() ?? '').join('');
+  return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 }
+
+const formatTime12h = (time: string) => {
+  if (!time) return '';
+  const [h, m] = time.split(':');
+  const hours = parseInt(h, 10);
+  const suffix = hours >= 12 ? 'PM' : 'AM';
+  const hours12 = hours % 12 || 12;
+  return `${hours12.toString().padStart(2, '0')}:${m} ${suffix}`;
+};
 
 const WEEKDAYS = [
   { day: 1, label: 'Mon' },
@@ -158,6 +170,11 @@ function DoctorModal({ mode, initialData, departments, onClose, onSave, saving, 
   };
 
   const renderAvailabilityInputs = () => {
+    if (!form.availabilityType) {
+      return (
+        <p className="text-sm text-neutral-400 italic">Select an availability type above to continue.</p>
+      );
+    }
     if (form.availabilityType === 'week') {
       return (
         <>
@@ -443,10 +460,11 @@ function DoctorModal({ mode, initialData, departments, onClose, onSave, saving, 
 
               <Field label="Slot duration" required>
                 <select
-                  value={String(form.availabilitySlotDurationMinutes)}
+                  value={String(form.availabilitySlotDurationMinutes || '')}
                   onChange={e => set('availabilitySlotDurationMinutes', Number(e.target.value))}
                   className={INPUT}
                 >
+                  <option value="">-- Select slot duration --</option>
                   <option value="15">15 minutes</option>
                   <option value="30">30 minutes</option>
                   <option value="45">45 minutes</option>
@@ -479,6 +497,20 @@ function DoctorModal({ mode, initialData, departments, onClose, onSave, saving, 
                 <Field label="Experience">
                   <input className={INPUT} value={form.experience} placeholder="e.g. 10 years"
                     onChange={e => set('experience', e.target.value)} />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Age">
+                  <input className={INPUT} type="number" value={form.age} placeholder="e.g. 45"
+                    onChange={e => set('age', e.target.value)} />
+                </Field>
+                <Field label="Gender">
+                  <select className={INPUT} value={form.gender} onChange={e => set('gender', e.target.value)}>
+                    <option value="">-- Select gender --</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
                 </Field>
               </div>
 
@@ -712,6 +744,7 @@ export default function HospitalDoctorsPage() {
   // Modal state
   const [addOpen, setAddOpen] = useState(false);
   const [editDoctor, setEditDoctor] = useState<Doctor | null>(null);
+  const [viewDoctor, setViewDoctor] = useState<Doctor | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Doctor | null>(null);
   const [modalSaving, setModalSaving] = useState(false);
   const [modalDeleting, setModalDeleting] = useState(false);
@@ -723,12 +756,19 @@ export default function HospitalDoctorsPage() {
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const load = async () => {
+  const load = async (updatedDoctorId?: string) => {
     const [docRes, deptRes] = await Promise.all([
       hospitalAdminApi.listDoctors(),
       hospitalAdminApi.listDepartments(),
     ]);
-    if (docRes.data) setDoctors(docRes.data);
+    if (docRes.data) {
+      setDoctors(docRes.data);
+      // If we're viewing a doctor's profile, refresh it with the latest data
+      if (updatedDoctorId) {
+        const fresh = docRes.data.find(d => d.id === updatedDoctorId);
+        if (fresh) setViewDoctor(fresh);
+      }
+    }
     if (deptRes.data) {
       setDepartments(deptRes.data);
       setOpenDepts(new Set(deptRes.data.map(d => d.id)));
@@ -781,12 +821,49 @@ export default function HospitalDoctorsPage() {
     return form.department;
   };
 
-  const syncDoctorAvailability = async (doctorId: string, form: DoctorFormData): Promise<boolean> => {
+  const validateAvailability = (form: DoctorFormData): boolean => {
+    if (!form.availabilityType) return true;
+
     if (form.availabilityType === 'week') {
       if (form.weeklyDays.length === 0) {
         setModalError('Please choose at least one weekday.');
         return false;
       }
+      if (!form.availabilityStartTime || !form.availabilityEndTime) {
+        setModalError('Please set the availability start and end times.');
+        return false;
+      }
+      if (!form.availabilitySlotDurationMinutes) {
+        setModalError('Please select a slot duration.');
+        return false;
+      }
+      return true;
+    }
+
+    if (form.availabilityType === 'month') {
+      if (form.monthlyDayNumbers.length === 0) {
+        setModalError('Please choose at least one day of the month.');
+        return false;
+      }
+      if (!form.availabilityStartTime || !form.availabilityEndTime) {
+        setModalError('Please set the availability start and end times.');
+        return false;
+      }
+      if (!form.availabilitySlotDurationMinutes) {
+        setModalError('Please select a slot duration.');
+        return false;
+      }
+      return true;
+    }
+
+    return true;
+  };
+
+  const syncDoctorAvailability = async (doctorId: string, form: DoctorFormData): Promise<boolean> => {
+    // If no availability type selected, skip syncing schedules (no-op)
+    if (!form.availabilityType) return true;
+
+    if (form.availabilityType === 'week') {
       await hospitalAdminApi.syncDoctorWeeklySchedules(doctorId, form.weeklyDays.map(day => ({
         day_of_week: day,
         start_time: form.availabilityStartTime,
@@ -799,6 +876,14 @@ export default function HospitalDoctorsPage() {
     if (form.availabilityType === 'month') {
       if (form.monthlyDayNumbers.length === 0) {
         setModalError('Please choose at least one day of the month.');
+        return false;
+      }
+      if (!form.availabilityStartTime || !form.availabilityEndTime) {
+        setModalError('Please set the availability start and end times.');
+        return false;
+      }
+      if (!form.availabilitySlotDurationMinutes) {
+        setModalError('Please select a slot duration.');
         return false;
       }
       const [year, month] = form.monthlyMonth.split('-').map(Number);
@@ -815,7 +900,9 @@ export default function HospitalDoctorsPage() {
       return true;
     }
 
-    await hospitalAdminApi.syncDoctorAvailableDates(doctorId, form.availableDates);
+    if (form.availableDates.length > 0) {
+      await hospitalAdminApi.syncDoctorAvailableDates(doctorId, form.availableDates);
+    }
     return true;
   };
 
@@ -860,11 +947,22 @@ export default function HospitalDoctorsPage() {
     if (!form.specialty.trim()) { setModalError('Specialty is required.'); return; }
     setModalSaving(true);
     setModalError(null);
+    if (!validateAvailability(form)) { setModalSaving(false); return; }
     const deptId = await resolveDepartment(form);
     if (!deptId) { setModalSaving(false); return; }
     const bio = [form.title, form.experience].filter(Boolean).join(' • ') || form.bio;
-    const payload = buildDoctorPayload(form, deptId, bio, false);
-    const res = await hospitalAdminApi.createDoctor(payload);
+    
+    const formData = new FormData();
+    formData.append('name', form.name.trim());
+    formData.append('specialty', form.specialty.trim());
+    formData.append('bio', bio);
+    formData.append('department', deptId);
+    if (form.image) formData.append('image', form.image);
+    if (form.age) formData.append('age', form.age);
+    if (form.gender) formData.append('gender', form.gender);
+    if (form.email) formData.append('email', form.email.trim());
+
+    const res = await hospitalAdminApi.createDoctor(formData);
     if (res.error || !res.data) { setModalError(res.error ?? 'Failed to create doctor.'); setModalSaving(false); return; }
     const synced = await syncDoctorAvailability(res.data.id, form);
     if (!synced) { setModalSaving(false); return; }
@@ -875,19 +973,33 @@ export default function HospitalDoctorsPage() {
 
   // ── Edit doctor ────────────────────────────────────────────────────────────
   const handleEdit = async (form: DoctorFormData) => {
-    if (!editDoctor) return;
+    const editId = editDoctor?.id;
+    if (!editId) return;
     if (!form.name.trim()) { setModalError('Name is required.'); return; }
     setModalSaving(true);
     setModalError(null);
+    if (!validateAvailability(form)) { setModalSaving(false); return; }
     const deptId = await resolveDepartment(form);
     if (!deptId) { setModalSaving(false); return; }
-    const bio = form.bio || [form.title, form.experience].filter(Boolean).join(' • ');
-    const payload = buildDoctorPayload(form, deptId, bio, true);
-    const res = await hospitalAdminApi.updateDoctor(editDoctor.id, payload);
+    const bio = [form.title, form.experience].filter(Boolean).join(' • ') || form.bio;
+    
+    const formData = new FormData();
+    formData.append('name', form.name.trim());
+    formData.append('specialty', form.specialty.trim());
+    formData.append('bio', bio);
+    formData.append('department', deptId);
+    formData.append('is_active', String(form.is_active));
+    if (form.image) formData.append('image', form.image);
+    else if (form.image_url) formData.append('image_url', form.image_url);
+    if (form.age) formData.append('age', form.age);
+    if (form.gender) formData.append('gender', form.gender);
+    if (form.email) formData.append('email', form.email.trim());
+
+    const res = await hospitalAdminApi.updateDoctor(editId, formData);
     if (res.error) { setModalError(res.error); setModalSaving(false); return; }
-    const synced = await syncDoctorAvailability(editDoctor.id, form);
+    const synced = await syncDoctorAvailability(editId, form);
     if (!synced) { setModalSaving(false); return; }
-    await load();
+    await load(editId);
     setEditDoctor(null);
     setModalSaving(false);
   };
@@ -1020,11 +1132,13 @@ export default function HospitalDoctorsPage() {
       title: parts[0] ?? '',
       specialty: doc.specialty,
       bio: doc.bio ?? '',
-      email: '',
+      email: doc.email || '',
       experience: parts[1] ?? '',
-      department: doc.department ?? '',
+      department: String(doc.department || ''),
       newDeptName: '',
-      is_active: doc.is_active,
+      is_active: doc.is_active ?? true,
+      age: doc.age ? String(doc.age) : '',
+      gender: doc.gender || '',
       image: null,
       image_url: doc.image_url ?? '',
       imagePreview: resolvedImage,
@@ -1150,6 +1264,13 @@ export default function HospitalDoctorsPage() {
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <button
                             type="button"
+                            onClick={() => { setViewDoctor(doc); }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-border text-sm text-neutral-gray hover:bg-primary-light hover:text-primary hover:border-primary/30 transition-colors"
+                          >
+                            <FiUser size={14} /> Profile
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => { setModalError(null); setModalDeleting(false); setEditDoctor(doc); }}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-border text-sm text-neutral-gray hover:bg-primary-light hover:text-primary hover:border-primary/30 transition-colors"
                           >
@@ -1221,6 +1342,135 @@ export default function HospitalDoctorsPage() {
           onConfirm={handleImportConfirm}
           importing={importing}
         />
+      )}
+
+      {/* View Doctor Modal */}
+      {viewDoctor && (
+        <ModalPortal>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-neutral-border bg-gradient-to-r from-primary/10 to-transparent">
+              <h2 className="text-xl font-semibold text-neutral-dark flex items-center gap-2">
+                <FiUser className="text-primary" /> Doctor Profile
+              </h2>
+              <button onClick={() => setViewDoctor(null)} className="p-2 rounded-lg hover:bg-white/50 text-neutral-gray transition-colors">
+                <FiX size={20} />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                
+                {/* Left Column: Basic Info */}
+                <div className="md:col-span-1 flex flex-col items-center text-center space-y-5">
+                  <div className="h-36 w-36 overflow-hidden rounded-full shadow-xl border-4 border-white ring-4 ring-primary/20 bg-primary-light flex items-center justify-center text-5xl font-bold text-primary">
+                    {viewDoctor.image_url_resolved || viewDoctor.image_url ? (
+                      <img src={normalizeLogoUrl(viewDoctor.image_url_resolved || viewDoctor.image_url) || ''} alt={viewDoctor.name} className="h-full w-full object-cover" />
+                    ) : (
+                      initials(viewDoctor.name)
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-extrabold text-neutral-dark tracking-tight leading-tight">{viewDoctor.name}</h3>
+                    <p className="text-base text-primary font-semibold mt-1.5">
+                      {viewDoctor.specialty === viewDoctor.department_name || !viewDoctor.department_name
+                        ? viewDoctor.specialty 
+                        : `${viewDoctor.specialty} • ${viewDoctor.department_name}`}
+                    </p>
+                    <div className="mt-3">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold shadow-sm ${
+                        viewDoctor.is_active 
+                          ? 'bg-emerald-100 text-emerald-700' 
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        <span className={`w-2 h-2 rounded-full ${viewDoctor.is_active ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                        {viewDoctor.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="w-full bg-neutral-50/80 rounded-2xl p-4 border border-neutral-200/60 shadow-sm space-y-3">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-neutral-500 font-bold uppercase tracking-wider text-xs">Age</span>
+                      <span className="font-bold text-neutral-dark">{viewDoctor.age ? `${viewDoctor.age} y` : '—'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-neutral-500 font-bold uppercase tracking-wider text-xs">Gender</span>
+                      <span className="font-bold text-neutral-dark">{viewDoctor.gender || '—'}</span>
+                    </div>
+                    <div className="flex flex-col items-start text-sm pt-2 border-t border-neutral-200/60 mt-2">
+                      <span className="text-neutral-500 font-bold uppercase tracking-wider text-xs mb-1">Email</span>
+                      <span className="font-bold text-neutral-dark truncate w-full text-left" title={viewDoctor.email || ''}>{viewDoctor.email || '—'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Bio & Schedule */}
+                <div className="md:col-span-2 flex flex-col bg-neutral-50 rounded-2xl p-6 border border-neutral-200 shadow-sm">
+                  <div className="flex-1">
+                    <h4 className="text-xs font-bold text-primary uppercase tracking-widest mb-3">Biography</h4>
+                    <p className="text-base text-neutral-700 leading-relaxed whitespace-pre-wrap">
+                      {viewDoctor.bio || <span className="text-neutral-400 italic">No biography available.</span>}
+                    </p>
+                  </div>
+
+                  <div className="border-t border-neutral-200/80 pt-5 mt-6">
+                    <h4 className="text-xs font-bold text-primary uppercase tracking-widest mb-4">Schedule Information</h4>
+                    
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="bg-white p-3 rounded-xl border border-neutral-200 shadow-sm flex flex-col justify-center">
+                        <p className="text-xs text-neutral-400 font-bold uppercase tracking-wider mb-1">Type</p>
+                        <p className="text-sm font-bold text-neutral-dark capitalize">
+                          {viewDoctor.schedules && viewDoctor.schedules.length > 0
+                            ? (viewDoctor.schedules[0].specific_date ? 'Specific Dates' : 'Weekly')
+                            : 'Not Set'}
+                        </p>
+                      </div>
+                      <div className="bg-white p-3 rounded-xl border border-neutral-200 shadow-sm flex flex-col justify-center">
+                        <p className="text-xs text-neutral-400 font-bold uppercase tracking-wider mb-1">Slot Duration</p>
+                        <p className="text-sm font-bold text-neutral-dark">
+                          {viewDoctor.schedules && viewDoctor.schedules.length > 0 ? `${viewDoctor.schedules[0].slot_duration_minutes} Mins` : '—'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm">
+                      <p className="text-xs text-neutral-400 font-bold uppercase tracking-wider mb-3">Active Shifts</p>
+                      {viewDoctor.schedules && viewDoctor.schedules.length > 0 ? (
+                        <div className="max-h-[140px] overflow-y-auto pr-2">
+                          <ul className="space-y-2.5">
+                            {viewDoctor.schedules.filter((s, idx, arr) => 
+                              idx === arr.findIndex(t => 
+                                t.specific_date === s.specific_date && 
+                                t.day_of_week === s.day_of_week && 
+                                t.start_time === s.start_time && 
+                                t.end_time === s.end_time
+                              )
+                            ).map((schedule, idx) => (
+                              <li key={idx} className="flex justify-between items-center text-sm text-neutral-800 border-b border-neutral-100 pb-2.5 last:border-0 last:pb-0">
+                                <span className="font-bold text-neutral-dark">
+                                  {schedule.specific_date 
+                                    ? schedule.specific_date 
+                                    : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][schedule.day_of_week]}
+                                </span>
+                                <span className="bg-primary/10 text-primary px-3 py-1 rounded-lg font-extrabold text-xs tracking-wide">
+                                  {formatTime12h(schedule.start_time.substring(0, 5))} - {formatTime12h(schedule.end_time.substring(0, 5))}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : (
+                        <p className="text-sm italic text-neutral-400">No active shifts scheduled.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-neutral-border bg-neutral-50 flex justify-end">
+              <Button variant="secondary" onClick={() => setViewDoctor(null)}>Close</Button>
+            </div>
+          </div>
+        </ModalPortal>
       )}
     </div>
   );

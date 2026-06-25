@@ -57,7 +57,7 @@ function normalizeList<T>(data: unknown): T[] {
 
 export async function getHospitalProfile(subdomain: string): Promise<HospitalProfile | null> {
     const res = await fetch(`${API_BASE_URL}/hospital/public/profile/?subdomain=${encodeURIComponent(subdomain)}`, {
-        next: { revalidate: 60 }
+        cache: 'no-store'
     });
     if (!res.ok) {
         return null;
@@ -79,7 +79,7 @@ export async function getHospitalBusinessInfo(subdomain: string): Promise<Hospit
 
 export async function getHospitalPages(subdomain: string): Promise<HospitalPage[]> {
     const res = await fetch(`${API_BASE_URL}/hospital/public/pages/?subdomain=${encodeURIComponent(subdomain)}`, {
-        next: { revalidate: 60 }
+        cache: 'no-store'
     });
     if (!res.ok) {
         if (res.status === 404 || res.status === 400) return [];
@@ -90,7 +90,7 @@ export async function getHospitalPages(subdomain: string): Promise<HospitalPage[
 
 export async function getHospitalDoctors(subdomain: string): Promise<Doctor[]> {
     const res = await fetch(`${API_BASE_URL}/hospital/public/doctors/?subdomain=${encodeURIComponent(subdomain)}`, {
-        next: { revalidate: 60 }
+        cache: 'no-store'
     });
     if (!res.ok) {
         if (res.status === 404 || res.status === 400) return [];
@@ -102,7 +102,7 @@ export async function getHospitalDoctors(subdomain: string): Promise<Doctor[]> {
 
 export async function getHospitalDepartments(subdomain: string): Promise<Department[]> {
     const res = await fetch(`${API_BASE_URL}/hospital/public/departments/?subdomain=${encodeURIComponent(subdomain)}`, {
-        next: { revalidate: 60 }
+        cache: 'no-store'
     });
     if (!res.ok) {
         if (res.status === 404 || res.status === 400) return [];
