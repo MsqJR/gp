@@ -19,7 +19,9 @@ class Doctor(models.Model):
         related_name='doctors'
     )
     name = models.CharField(max_length=255)
+    title = models.CharField(max_length=255, blank=True)
     specialty = models.CharField(max_length=255)
+    experience = models.CharField(max_length=255, blank=True)
     bio = models.TextField(blank=True)
     image = models.ImageField(upload_to='doctor_images/', null=True, blank=True)
     image_url = models.URLField(blank=True, null=True)

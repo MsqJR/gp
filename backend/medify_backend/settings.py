@@ -20,7 +20,7 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-this-in-produc
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,192.168.1.17').split(',')
 
 # Allow Railway and Render hosts
 if config('RAILWAY_ENVIRONMENT', default='') or config('RENDER', default=''):
@@ -197,6 +197,7 @@ FRONTEND_PASSWORD_RESET_PATH = config('FRONTEND_PASSWORD_RESET_PATH', default='/
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://192.168.1.17:3000",
     FRONTEND_URL,
     "https://frontend-one-woad-66.vercel.app",
 ]

@@ -72,7 +72,8 @@ function SignupForm() {
 
     try {
       // Call backend API for signup
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 
+        (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8000/api` : 'http://localhost:8000/api')
       const response = await fetch(`${API_URL}/auth/signup/`, {
         method: 'POST',
         headers: {

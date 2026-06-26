@@ -30,6 +30,13 @@ interface DoctorsListClientProps {
 const getDoctorSummary = (doc: Doctor) => {
   const bullet = '\u2022';
   const separator = ` ${bullet} `;
+  if (doc.title || doc.experience) {
+    return {
+      title: doc.title || '',
+      experience: doc.experience || '',
+      summary: (doc.bio || '').trim() || 'Dedicated to patient-first care and clinical excellence.',
+    };
+  }
   const rawBio = (doc.bio || '').trim();
   if (!rawBio) {
     return {
@@ -40,10 +47,11 @@ const getDoctorSummary = (doc: Doctor) => {
   }
   const parts = rawBio.split(separator).map(part => part.trim()).filter(Boolean);
   if (parts.length >= 2) {
+    const extraBio = parts.slice(2).join(separator).trim();
     return {
       title: parts[0] || '',
       experience: parts[1] || '',
-      summary: parts.slice(2).join(`${separator}`).trim() || parts[0] || rawBio,
+      summary: extraBio || 'Dedicated to patient-first care and clinical excellence.',
     };
   }
   return { title: '', experience: '', summary: rawBio };

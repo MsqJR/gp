@@ -47,8 +47,8 @@ export default function HospitalPatientsPage() {
         let loadedName = 'Medify';
         let loadedLogo = null;
 
-        if (infoRes && infoRes.ok) {
-          const infoData = await infoRes.json().catch(() => null);
+        if (infoRes && infoRes.data) {
+          const infoData = infoRes.data as any;
           if (infoData) {
             if (infoData.name) loadedName = infoData.name;
             loadedLogo = normalizeLogoUrl(infoData.logo_url) || normalizeLogoUrl(infoData.logo);

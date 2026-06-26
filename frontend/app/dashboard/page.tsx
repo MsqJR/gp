@@ -209,7 +209,8 @@ export default function DashboardPage() {
     // Also fetch real state from backend for hospital users
     const token = localStorage.getItem('access_token')
     if (token && detectedType === 'hospital') {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 
+        (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8000/api` : 'http://localhost:8000/api')
       // Fetch subdomain for My Website link
       fetch(`${API_URL}/website-setups/`, { headers: { Authorization: `Bearer ${token}` } })
         .then(r => r.ok ? r.json() : null)

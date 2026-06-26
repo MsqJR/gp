@@ -97,6 +97,31 @@ function pad2(value: number) {
   return String(value).padStart(2, '0');
 }
 
+function parseDoctorDetails(doc: Doctor) {
+  if (doc.title || doc.experience) {
+    return {
+      title: doc.title || '',
+      experience: doc.experience || '',
+      bio: doc.bio || '',
+    };
+  }
+  const parts = (doc.bio ?? '').split(' • ').map(part => part.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    return {
+      title: parts[0] || '',
+      experience: parts[1] || '',
+      bio: parts.slice(2).join(' • ').trim(),
+    };
+  }
+  return { title: '', experience: '', bio: doc.bio ?? '' };
+}
+
+function buildDoctorBio(form: DoctorFormData): string {
+  const extraBio = form.bio.trim();
+  if (extraBio) return extraBio;
+  return [form.title.trim(), form.experience.trim()].filter(Boolean).join(' • ');
+}
+
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month, 0).getDate();
 }
@@ -754,16 +779,35 @@ export default function HospitalDoctorsPage() {
   const [importRows, setImportRows] = useState<ImportRow[] | null>(null);
   const [importing, setImporting] = useState(false);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  // Success toast for add/edit/delete
+  const [successToast, setSuccessToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const load = async (updatedDoctorId?: string) => {
+  const showSuccessToast = (message: string) => {
+    setSuccessToast(message);
+    setTimeout(() => setSuccessToast(null), 4000);
+  };
+
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = async (updatedDoctorId?: string): Promise<boolean> => {
+    setLoadError(null);
     const [docRes, deptRes] = await Promise.all([
       hospitalAdminApi.listDoctors(),
       hospitalAdminApi.listDepartments(),
     ]);
+    let hasError = false;
+    if (docRes.error) {
+      hasError = true;
+      setLoadError(`Failed to load doctors: ${docRes.error}`);
+    }
+    if (deptRes.error && !docRes.error) {
+      hasError = true;
+      setLoadError(`Failed to load departments: ${deptRes.error}`);
+    }
+
     if (docRes.data) {
       setDoctors(docRes.data);
-      // If we're viewing a doctor's profile, refresh it with the latest data
       if (updatedDoctorId) {
         const fresh = docRes.data.find(d => d.id === updatedDoctorId);
         if (fresh) setViewDoctor(fresh);
@@ -774,9 +818,11 @@ export default function HospitalDoctorsPage() {
       setOpenDepts(new Set(deptRes.data.map(d => d.id)));
     }
     setLoading(false);
+    return !hasError;
   };
 
   useEffect(() => { void load(); }, []);
+
 
   // ── Filtered doctors grouped by department ─────────────────────────────────
   const filtered = useMemo(() => {
@@ -913,31 +959,45 @@ export default function HospitalDoctorsPage() {
     includeActive: boolean,
   ): FormData | {
     name: string;
+    title?: string;
     specialty: string;
+    experience?: string;
     bio: string;
     department: string;
     image_url?: string;
     is_active?: boolean;
+    age?: number;
+    gender?: string;
+    email?: string;
   } => {
-    const imageUrl = form.image_url.trim();
-    if (form.image) {
-      const payload = new FormData();
-      payload.append('name', form.name.trim());
-      payload.append('specialty', form.specialty.trim());
-      payload.append('bio', bio);
-      payload.append('department', deptId);
-      payload.append('image', form.image);
-      if (includeActive) payload.append('is_active', String(form.is_active));
-      return payload;
-    }
-
-    return {
+    const shared = {
       name: form.name.trim(),
       specialty: form.specialty.trim(),
       bio,
       department: deptId,
-      ...(imageUrl ? { image_url: imageUrl } : {}),
+      title: form.title.trim(),
+      experience: form.experience.trim(),
+      email: form.email.trim(),
+      gender: form.gender,
+      ...(form.age ? { age: Number(form.age) } : { age: null }),
       ...(includeActive ? { is_active: form.is_active } : {}),
+    };
+
+    if (form.image) {
+      const payload = new FormData();
+      Object.entries(shared).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          payload.append(key, String(value));
+        }
+      });
+      payload.append('image', form.image);
+      return payload;
+    }
+
+    const imageUrl = form.image_url.trim();
+    return {
+      ...shared,
+      ...(imageUrl.startsWith('http://') || imageUrl.startsWith('https://') ? { image_url: imageUrl } : {}),
     };
   };
 
@@ -950,25 +1010,26 @@ export default function HospitalDoctorsPage() {
     if (!validateAvailability(form)) { setModalSaving(false); return; }
     const deptId = await resolveDepartment(form);
     if (!deptId) { setModalSaving(false); return; }
-    const bio = [form.title, form.experience].filter(Boolean).join(' • ') || form.bio;
-    
-    const formData = new FormData();
-    formData.append('name', form.name.trim());
-    formData.append('specialty', form.specialty.trim());
-    formData.append('bio', bio);
-    formData.append('department', deptId);
-    if (form.image) formData.append('image', form.image);
-    if (form.age) formData.append('age', form.age);
-    if (form.gender) formData.append('gender', form.gender);
-    if (form.email) formData.append('email', form.email.trim());
+    const bio = buildDoctorBio(form);
+    const payload = buildDoctorPayload(form, deptId, bio, false);
 
-    const res = await hospitalAdminApi.createDoctor(formData);
-    if (res.error || !res.data) { setModalError(res.error ?? 'Failed to create doctor.'); setModalSaving(false); return; }
+    const res = await hospitalAdminApi.createDoctor(payload);
+    if (res.error || !res.data) {
+      setModalError(res.error ?? 'Failed to create doctor.');
+      setModalSaving(false);
+      return;
+    }
     const synced = await syncDoctorAvailability(res.data.id, form);
     if (!synced) { setModalSaving(false); return; }
-    await load();
+    const refreshed = await load();
+    if (!refreshed) {
+      setModalError('Doctor was saved but the list could not be refreshed. Please reload the page.');
+      setModalSaving(false);
+      return;
+    }
     setAddOpen(false);
     setModalSaving(false);
+    showSuccessToast(`${/^dr\.?\s/i.test(form.name.trim()) ? '' : 'Dr. '}${form.name.trim()} has been added successfully.`);
   };
 
   // ── Edit doctor ────────────────────────────────────────────────────────────
@@ -981,27 +1042,26 @@ export default function HospitalDoctorsPage() {
     if (!validateAvailability(form)) { setModalSaving(false); return; }
     const deptId = await resolveDepartment(form);
     if (!deptId) { setModalSaving(false); return; }
-    const bio = [form.title, form.experience].filter(Boolean).join(' • ') || form.bio;
-    
-    const formData = new FormData();
-    formData.append('name', form.name.trim());
-    formData.append('specialty', form.specialty.trim());
-    formData.append('bio', bio);
-    formData.append('department', deptId);
-    formData.append('is_active', String(form.is_active));
-    if (form.image) formData.append('image', form.image);
-    else if (form.image_url) formData.append('image_url', form.image_url);
-    if (form.age) formData.append('age', form.age);
-    if (form.gender) formData.append('gender', form.gender);
-    if (form.email) formData.append('email', form.email.trim());
+    const bio = buildDoctorBio(form);
+    const payload = buildDoctorPayload(form, deptId, bio, true);
 
-    const res = await hospitalAdminApi.updateDoctor(editId, formData);
-    if (res.error) { setModalError(res.error); setModalSaving(false); return; }
+    const res = await hospitalAdminApi.updateDoctor(editId, payload);
+    if (res.error) {
+      setModalError(res.error);
+      setModalSaving(false);
+      return;
+    }
     const synced = await syncDoctorAvailability(editId, form);
     if (!synced) { setModalSaving(false); return; }
-    await load(editId);
+    const refreshed = await load(editId);
+    if (!refreshed) {
+      setModalError('Doctor was updated but the list could not be refreshed. Please reload the page.');
+      setModalSaving(false);
+      return;
+    }
     setEditDoctor(null);
     setModalSaving(false);
+    showSuccessToast(`${/^dr\.?\s/i.test(form.name.trim()) ? '' : 'Dr. '}${form.name.trim()} has been updated successfully.`);
   };
 
   const handleDelete = async (doc: Doctor) => {
@@ -1013,12 +1073,18 @@ export default function HospitalDoctorsPage() {
       setModalDeleting(false);
       return;
     }
-    await load();
+    const refreshed = await load();
+    if (!refreshed) {
+      setModalError('Doctor was deleted but the list could not be refreshed. Please reload the page.');
+      setModalDeleting(false);
+      return;
+    }
     setDeleteTarget(null);
     if (editDoctor?.id === doc.id) {
       setEditDoctor(null);
     }
     setModalDeleting(false);
+    showSuccessToast(`${doc.name} has been removed from the directory.`);
   };
 
   // ── Excel/CSV import ───────────────────────────────────────────────────────
@@ -1074,10 +1140,13 @@ export default function HospitalDoctorsPage() {
         const bio = row.bio || [row.title, row.experience].filter(Boolean).join(' • ');
         const docRes = await hospitalAdminApi.createDoctor({
           name: row.name,
+          title: row.title || undefined,
           specialty: row.specialty || 'General',
+          experience: row.experience || undefined,
           bio,
           department: deptId,
           image_url: row.photo || undefined,
+          email: row.email || undefined,
         });
         if (docRes.data) { await hospitalAdminApi.createDefaultSchedules(docRes.data.id); created++; }
       } catch { /* skip bad rows */ }
@@ -1092,7 +1161,7 @@ export default function HospitalDoctorsPage() {
 
   // ── Build edit initial form ─────────────────────────────────────────────────
   const editInitial = (doc: Doctor): DoctorFormData => {
-    const parts = (doc.bio ?? '').split(' • ');
+    const { title, experience, bio } = parseDoctorDetails(doc);
     const resolvedImage = normalizeLogoUrl(doc.image_url_resolved || doc.image_url) || '';
     
     // Convert existing schedules to available dates format
@@ -1129,11 +1198,11 @@ export default function HospitalDoctorsPage() {
 
     return {
       name: doc.name,
-      title: parts[0] ?? '',
+      title,
       specialty: doc.specialty,
-      bio: doc.bio ?? '',
+      bio,
       email: doc.email || '',
-      experience: parts[1] ?? '',
+      experience,
       department: String(doc.department || ''),
       newDeptName: '',
       is_active: doc.is_active ?? true,
@@ -1173,7 +1242,27 @@ export default function HospitalDoctorsPage() {
         </div>
       </div>
 
-      {/* Success banner */}
+      {/* Load error banner */}
+      {loadError && (
+        <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-sm font-medium">
+          <FiAlertCircle className="flex-shrink-0 text-red-600" /> {loadError}
+          <button onClick={() => void load()} className="ml-auto underline hover:text-red-900">Retry</button>
+        </div>
+      )}
+
+      {/* Success toast — add/edit/delete */}
+
+      {successToast && (
+        <div className="fixed bottom-6 right-6 z-[10000] flex items-center gap-3 px-5 py-3.5 bg-emerald-600 text-white rounded-2xl shadow-2xl text-sm font-semibold animate-fade-in max-w-sm">
+          <FiCheck className="flex-shrink-0" size={18} />
+          <span>{successToast}</span>
+          <button onClick={() => setSuccessToast(null)} className="ml-auto text-white/70 hover:text-white">
+            <FiX size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Success banner — CSV import */}
       {importSuccess && (
         <div className="flex items-center gap-2 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-sm font-medium">
           <FiCheck className="flex-shrink-0" /> {importSuccess}
@@ -1247,10 +1336,9 @@ export default function HospitalDoctorsPage() {
                             )}
                           </div>
                         {/* Info */}
-                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-4 gap-1 sm:gap-3">
+                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-3">
                           <p className="font-medium text-neutral-dark truncate">{doc.name}</p>
                           <p className="text-sm text-primary truncate">{doc.specialty}</p>
-                          <p className="text-sm text-neutral-gray truncate">{doc.bio?.split(' • ')[1] ?? ''}</p>
                           <div>
                             <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                               doc.is_active
@@ -1345,7 +1433,9 @@ export default function HospitalDoctorsPage() {
       )}
 
       {/* View Doctor Modal */}
-      {viewDoctor && (
+      {viewDoctor && (() => {
+        const profile = parseDoctorDetails(viewDoctor);
+        return (
         <ModalPortal>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-neutral-border bg-gradient-to-r from-primary/10 to-transparent">
@@ -1370,11 +1460,11 @@ export default function HospitalDoctorsPage() {
                   </div>
                   <div>
                     <h3 className="text-2xl font-extrabold text-neutral-dark tracking-tight leading-tight">{viewDoctor.name}</h3>
-                    <p className="text-base text-primary font-semibold mt-1.5">
-                      {viewDoctor.specialty === viewDoctor.department_name || !viewDoctor.department_name
-                        ? viewDoctor.specialty 
-                        : `${viewDoctor.specialty} • ${viewDoctor.department_name}`}
-                    </p>
+                    {profile.title ? (
+                      <p className="text-sm text-neutral-gray font-medium mt-1">{profile.title}</p>
+                    ) : null}
+                    <p className="text-base text-primary font-semibold mt-1.5">{viewDoctor.specialty}</p>
+                    <p className="text-sm text-neutral-gray mt-1">{viewDoctor.department_name || '—'}</p>
                     <div className="mt-3">
                       <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold shadow-sm ${
                         viewDoctor.is_active 
@@ -1388,6 +1478,10 @@ export default function HospitalDoctorsPage() {
                   </div>
 
                   <div className="w-full bg-neutral-50/80 rounded-2xl p-4 border border-neutral-200/60 shadow-sm space-y-3">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-neutral-500 font-bold uppercase tracking-wider text-xs">Experience</span>
+                      <span className="font-bold text-neutral-dark">{profile.experience || '—'}</span>
+                    </div>
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-neutral-500 font-bold uppercase tracking-wider text-xs">Age</span>
                       <span className="font-bold text-neutral-dark">{viewDoctor.age ? `${viewDoctor.age} y` : '—'}</span>
@@ -1408,7 +1502,7 @@ export default function HospitalDoctorsPage() {
                   <div className="flex-1">
                     <h4 className="text-xs font-bold text-primary uppercase tracking-widest mb-3">Biography</h4>
                     <p className="text-base text-neutral-700 leading-relaxed whitespace-pre-wrap">
-                      {viewDoctor.bio || <span className="text-neutral-400 italic">No biography available.</span>}
+                      {profile.bio || <span className="text-neutral-400 italic">No biography available.</span>}
                     </p>
                   </div>
 
@@ -1471,7 +1565,8 @@ export default function HospitalDoctorsPage() {
             </div>
           </div>
         </ModalPortal>
-      )}
+        );
+      })()}
     </div>
   );
 }

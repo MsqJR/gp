@@ -1,6 +1,7 @@
 // API configuration and utility functions
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 
+  (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8000/api` : 'http://localhost:8000/api')
 
 export interface ApiResponse<T> {
   data?: T
@@ -66,12 +67,79 @@ export const getRefreshToken = (): string | null => {
   return localStorage.getItem('refresh_token')
 }
 
+// Mutex/Promise variable to prevent multiple overlapping token refresh requests
+let isRefreshingToken = false
+let tokenRefreshPromise: Promise<string | null> | null = null
+
+async function performTokenRefresh(): Promise<string | null> {
+  const refresh = getRefreshToken()
+  if (!refresh) return null
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/refresh/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refresh }),
+    })
+    if (!res.ok) {
+      // Clear session if refresh token is invalid/expired
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('isLoggedIn')
+        localStorage.removeItem('user')
+      }
+      return null
+    }
+    const data = await res.json()
+    if (data && typeof data.access === 'string') {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('access_token', data.access)
+      }
+      return data.access
+    }
+  } catch (err) {
+    console.error('Failed to refresh token:', err)
+  }
+  return null
+}
+
+export const getOrRefreshToken = async (): Promise<string | null> => {
+  const token = getAuthToken()
+  if (!token) return null
+
+  // Check if token is expired (JWT format check of exp claim)
+  try {
+    const payloadBase64 = token.split('.')[1]
+    if (payloadBase64) {
+      const decodedPayload = JSON.parse(atob(payloadBase64))
+      const exp = decodedPayload.exp
+      // Refresh 10 seconds before actual expiration
+      if (exp && Date.now() >= exp * 1000 - 10000) {
+        if (!isRefreshingToken) {
+          isRefreshingToken = true
+          tokenRefreshPromise = performTokenRefresh().finally(() => {
+            isRefreshingToken = false
+            tokenRefreshPromise = null
+          })
+        }
+        return tokenRefreshPromise
+      }
+    }
+  } catch (e) {
+    console.error('Error decoding JWT token:', e)
+  }
+  return token
+}
+
 // API request helper
 export const apiRequest = async <T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> => {
-  const token = getAuthToken()
+  let token = await getOrRefreshToken()
   
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -83,10 +151,29 @@ export const apiRequest = async <T>(
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    let response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
     })
+
+    // If unauthorized, attempt a proactive refresh and retry once
+    if (response.status === 401) {
+      if (!isRefreshingToken) {
+        isRefreshingToken = true
+        tokenRefreshPromise = performTokenRefresh().finally(() => {
+          isRefreshingToken = false
+          tokenRefreshPromise = null
+        })
+      }
+      const newToken = await tokenRefreshPromise
+      if (newToken) {
+        headers['Authorization'] = `Bearer ${newToken}`
+        response = await fetch(`${API_BASE_URL}${endpoint}`, {
+          ...options,
+          headers,
+        })
+      }
+    }
 
     const data = await response.json()
 
@@ -107,6 +194,7 @@ export const apiRequest = async <T>(
     }
   }
 }
+
 
 // Auth API functions
 export const authApi = {

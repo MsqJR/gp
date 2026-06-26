@@ -110,6 +110,12 @@ class DoctorSerializer(serializers.ModelSerializer):
             return obj.image.url
         return obj.image_url or None
 
+    def validate_department(self, value):
+        request = self.context.get('request')
+        if request is not None and value.website_setup.user_id != request.user.id:
+            raise serializers.ValidationError('Department does not belong to your hospital.')
+        return value
+
     class Meta:
         model = Doctor
         fields = '__all__'

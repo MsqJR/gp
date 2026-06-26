@@ -73,7 +73,7 @@ function PharmacyTemplatesLayoutContent({ children }: { children: React.ReactNod
     if (!isDemo) {
       const cachedInfo = safeJsonParse<BusinessInfoSnapshot>(getSiteItem('businessInfo'))
       const token = localStorage.getItem('access_token')
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8000/api` : 'http://localhost:8000/api')
 
       if (token) {
         void fetch(`${apiBase}/business-info/`, {

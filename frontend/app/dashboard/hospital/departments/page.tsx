@@ -221,7 +221,7 @@ export default function HospitalDepartmentsPage() {
           )}
 
           <div className="pt-4 flex gap-3">
-            <Button type="button" onClick={cancelEdit} variant="outline" className="rounded-xl px-6 hover:bg-neutral-100 flex-1">
+            <Button type="button" onClick={cancelEdit} variant="secondary" className="rounded-xl px-6 hover:bg-neutral-100 flex-1">
               Cancel
             </Button>
             <Button type="submit" disabled={saving} className="flex-1 rounded-xl h-12 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all active:scale-95 group">

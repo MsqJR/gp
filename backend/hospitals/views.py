@@ -1,5 +1,6 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -96,9 +97,16 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 class DoctorViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = DoctorSerializer
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
-        return Doctor.objects.filter(website_setup__user=self.request.user)
+        return (
+            Doctor.objects
+            .filter(website_setup__user=self.request.user)
+            .select_related('department')
+            .prefetch_related('schedules')
+            .order_by('name')
+        )
 
     def perform_create(self, serializer):
         website_setup = _get_or_create_website_setup(self.request.user)
@@ -113,13 +121,23 @@ class DoctorViewSet(viewsets.ModelViewSet):
             return
         serializer.save()
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class DoctorScheduleViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = DoctorScheduleSerializer
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
-        return DoctorSchedule.objects.filter(doctor__website_setup__user=self.request.user)
+        queryset = DoctorSchedule.objects.filter(doctor__website_setup__user=self.request.user)
+        doctor_id = self.request.query_params.get('doctor')
+        if doctor_id:
+            queryset = queryset.filter(doctor_id=doctor_id)
+        return queryset
 
     def perform_create(self, serializer):
         doctor_id = self.request.data.get('doctor')

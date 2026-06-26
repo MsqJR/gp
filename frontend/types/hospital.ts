@@ -52,7 +52,9 @@ export interface DoctorSchedule {
 export interface Doctor {
     id: string;
     name: string;
+    title?: string;
     specialty: string;
+    experience?: string;
     bio: string;
     image?: string | null;
     image_url: string | null;

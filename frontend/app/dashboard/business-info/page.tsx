@@ -118,7 +118,7 @@ export default function BusinessInfoPage() {
       try {
         const token = localStorage.getItem('access_token')
         if (token) {
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+          const API_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8000/api` : 'http://localhost:8000/api')
           const response = await fetch(`${API_URL}/business-info/`, {
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -214,7 +214,7 @@ export default function BusinessInfoPage() {
       throw new Error('Missing auth token.')
     }
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8000/api` : 'http://localhost:8000/api')
 
     const formDataToSend = new FormData()
     // Always send name (required for create)
@@ -418,7 +418,7 @@ export default function BusinessInfoPage() {
         } else if (userType === 'hospital') {
           const token = localStorage.getItem('access_token')
           if (!token) return
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+          const API_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8000/api` : 'http://localhost:8000/api')
           const res = await fetch(`${API_URL}/hospital/admin/profile/profile/`, {
             headers: { Authorization: `Bearer ${token}` },
           })
