@@ -101,6 +101,12 @@ class BusinessInfoViewSet(viewsets.ModelViewSet):
         business_info = self.get_object()
         business_info.is_published = True
         business_info.save()
+        
+        # Also mark the hospital profile as published if it exists
+        if hasattr(website_setup, 'hospital_profile'):
+            website_setup.hospital_profile.is_published = True
+            website_setup.hospital_profile.save()
+            
         serializer = self.get_serializer(business_info, context={'request': request})
         return Response(serializer.data)
 
@@ -132,7 +138,7 @@ class BusinessInfoViewSet(viewsets.ModelViewSet):
         else:
             template_id = website_setup.template_id
             try:
-                is_published = website_setup.businessinfo.is_published
+                is_published = website_setup.hospital_profile.is_published
             except Exception:
                 pass
 

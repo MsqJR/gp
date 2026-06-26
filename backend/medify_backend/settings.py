@@ -22,6 +22,10 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,192.168.1.17').split(',')
 
+# Allow subdomains on localhost for local development
+if '.localhost' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('.localhost')
+
 # Allow Railway and Render hosts
 if config('RAILWAY_ENVIRONMENT', default='') or config('RENDER', default=''):
     ALLOWED_HOSTS.append('.railway.app')
