@@ -1,3 +1,5 @@
+import { resolvePharmacyPath } from '@/lib/pharmacyTemplateRuntime'
+
 export type DemoModeState = {
 	isDemo: boolean
 	ownerId: string
@@ -23,7 +25,8 @@ export function parseDemoModeState(searchParams: SearchParamsLike): DemoModeStat
 }
 
 export function buildDemoAwarePath(path: string, state: DemoModeState): string {
-	const [base, hash] = path.split('#')
+	const resolvedPath = resolvePharmacyPath(path, state.isDemo)
+	const [base, hash] = resolvedPath.split('#')
 	const [pathname, query = ''] = base.split('?')
 	const params = new URLSearchParams(query)
 

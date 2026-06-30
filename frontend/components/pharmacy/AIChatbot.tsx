@@ -58,7 +58,13 @@ function deriveTenantSubdomain(explicitSubdomain?: string) {
     return ''
   }
   const parts = hostname.split('.')
-  return parts.length >= 3 ? parts[0] : ''
+  if (parts.length >= 3) {
+    return parts[0]
+  }
+  if (parts.length === 2 && parts[1] === 'localhost') {
+    return parts[0]
+  }
+  return ''
 }
 
 function buildWelcomeMessage(pharmacyName: string, pharmacyPhone: string) {

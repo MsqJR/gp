@@ -97,7 +97,7 @@ export default async function DepartmentsBlock({
           {total > showCount && (
             <div className="hidden sm:block flex-shrink-0">
               <Link
-                href={`/departments`}
+                href={`/#departments`}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90"
                 style={{
                   background: "var(--hospital-btn-primary)",
@@ -150,7 +150,7 @@ export default async function DepartmentsBlock({
         {total > showCount && (
           <div className="mt-10 flex sm:hidden justify-center">
             <Link
-              href={`/departments`}
+              href={`/#departments`}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90"
               style={{
                 background: "var(--hospital-btn-primary)",
@@ -218,7 +218,7 @@ export default async function DepartmentsBlock({
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 flex-shrink-0">
               <Link
-                href="/appointments/new"
+                href="/booking"
                 className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl text-sm font-bold transition-all hover:scale-105 shadow-lg"
                 style={{
                   background: "var(--hospital-surface)",
@@ -242,7 +242,7 @@ export default async function DepartmentsBlock({
                 Start Booking
               </Link>
               <Link
-                href="/departments"
+                href="/#departments"
                 className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl text-sm font-semibold border border-white/30 text-white transition-all hover:bg-white/10"
                 style={{ borderRadius: "var(--hospital-radius)" }}
               >

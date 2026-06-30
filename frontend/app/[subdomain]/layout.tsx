@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import HospitalChatWidget from '@/components/hospital/HospitalChatWidget';
-import { getHospitalBusinessInfo, getHospitalProfile } from '@/lib/hospitalApi';
+import { getHospitalBusinessInfo, getHospitalProfile, getHospitalDepartments } from '@/lib/hospitalApi';
 import { getSubdomainPublicInfo } from '@/lib/subdomainApi';
 import { normalizeLogoUrl } from '@/lib/storage';
 
@@ -21,6 +21,13 @@ export default async function HospitalLayout({ children, params }: LayoutProps) 
     
     const profile = await getHospitalProfile(resolvedParams.subdomain);
     const businessInfo = await getHospitalBusinessInfo(resolvedParams.subdomain);
+    
+    let departments: any[] = [];
+    try {
+        departments = await getHospitalDepartments(resolvedParams.subdomain);
+    } catch {
+        departments = [];
+    }
     
     const theme = profile?.theme_settings || {};
     const primaryColor = theme.primaryColor || '#2563eb';
@@ -257,7 +264,12 @@ export default async function HospitalLayout({ children, params }: LayoutProps) 
 
                         <nav className="hidden items-center gap-7 text-sm font-medium text-slate-600 md:flex">
                             <Link href="/" className="hover:text-slate-900">Home</Link>
-                            <Link href="/#departments" className="hover:text-slate-900">Departments</Link>
+                            <Link
+                                href={departments && departments.length > 0 ? `/departments/${departments[0].id}` : '/#departments'}
+                                className="hover:text-slate-900"
+                            >
+                                Departments
+                            </Link>
                             <Link href="/#doctors" className="hover:text-slate-900">Doctors</Link>
                             <Link href="/#contact" className="hover:text-slate-900">Contact</Link>
                         </nav>
@@ -287,7 +299,11 @@ export default async function HospitalLayout({ children, params }: LayoutProps) 
                             <p className="text-sm font-semibold text-white">Quick Links</p>
                             <div className="mt-3 space-y-2 text-sm text-slate-400">
                                 <p><Link href="/">Home</Link></p>
-                                <p><Link href="/#departments">Departments</Link></p>
+                                <p>
+                                    <Link href={departments && departments.length > 0 ? `/departments/${departments[0].id}` : '/#departments'}>
+                                        Departments
+                                    </Link>
+                                </p>
                                 <p><Link href="/#doctors">Doctors</Link></p>
                             </div>
                         </div>

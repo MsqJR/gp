@@ -40,6 +40,16 @@ export default function middleware(req: NextRequest) {
 
     // Exclude system paths from subdomain rewriting
     const path = url.pathname;
+
+    // Redirect template paths to clean paths on subdomains
+    if (path.startsWith('/templates/pharmacy/')) {
+        const match = path.match(/^\/templates\/pharmacy\/\d+(\/.*)?$/);
+        if (match) {
+            const subpath = match[1] || '/';
+            return NextResponse.redirect(new URL(`${subpath}${url.search}`, req.url));
+        }
+    }
+
     if (
         path.startsWith('/dashboard') ||
         path.startsWith('/login') ||

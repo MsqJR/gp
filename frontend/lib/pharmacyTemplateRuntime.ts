@@ -533,3 +533,16 @@ export async function submitTemplateOrder(params: SubmitTemplateOrderParams): Pr
     order: placed,
   }
 }
+
+export function resolvePharmacyPath(path: string, isDemo?: boolean): string {
+  if (typeof window !== 'undefined' && !isDemo) {
+    const hostname = window.location.hostname
+    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000'
+    const cleanRoot = rootDomain.replace(':3000', '')
+    const isSubdomain = hostname !== 'localhost' && hostname !== '127.0.0.1' && hostname !== cleanRoot && hostname.includes('.')
+    if (isSubdomain) {
+      return path.replace(/^\/templates\/pharmacy\/\d+/, '') || '/'
+    }
+  }
+  return path
+}
