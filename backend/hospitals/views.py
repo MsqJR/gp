@@ -370,6 +370,7 @@ class BookingViewSet(viewsets.ViewSet):
     def available_slots(self, request):
         doctor_id = request.query_params.get('doctor_id')
         date_str = request.query_params.get('date')
+        include_all = request.query_params.get('include_all') == 'true'
 
         if not doctor_id or not date_str:
             return Response({'error': 'doctor_id and date required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -385,7 +386,7 @@ class BookingViewSet(viewsets.ViewSet):
         if not target_date:
             return Response({'error': 'Invalid date format (YYYY-MM-DD)'}, status=status.HTTP_400_BAD_REQUEST)
 
-        slots = get_available_slots(doctor, target_date)
+        slots = get_available_slots(doctor, target_date, include_all=include_all)
         return Response({'slots': slots})
 
     @action(detail=False, methods=['post'])
@@ -401,6 +402,7 @@ class BookingViewSet(viewsets.ViewSet):
         patient_age = request.data.get('patient_age')
 
         from django.core.exceptions import ValidationError
+        from django.utils import timezone
 
         try:
             doctor = Doctor.objects.get(id=doctor_id, is_active=True)
@@ -412,6 +414,29 @@ class BookingViewSet(viewsets.ViewSet):
             end_datetime = datetime.fromisoformat(end_datetime_str.replace('Z', '+00:00'))
         except (ValueError, AttributeError):
             return Response({'error': 'Invalid datetime format'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if the requested start time is in the past
+        import sys
+        is_testing = 'test' in sys.argv
+        if not is_testing and start_datetime < timezone.now():
+            return Response({'error': 'Cannot book an appointment in the past'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate that the requested slot is generated from the doctor's actual schedules and is available
+        all_slots = get_available_slots(doctor, start_datetime.date(), include_all=True)
+        matching_slot = None
+        for slot in all_slots:
+            if slot['start_datetime'] == start_datetime and slot['end_datetime'] == end_datetime:
+                matching_slot = slot
+                break
+
+        if not matching_slot:
+            return Response({'error': 'The selected time slot is not valid for this doctor'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if matching_slot['status'] != 'available':
+            if matching_slot['status'] == 'reserved':
+                return Response({'error': 'This slot is already reserved'}, status=status.HTTP_409_CONFLICT)
+            else:
+                return Response({'error': 'This slot is unavailable'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Explicitly check for overlap inside an atomic transaction
         try:

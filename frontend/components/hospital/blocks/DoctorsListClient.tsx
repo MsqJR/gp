@@ -60,7 +60,17 @@ const getDoctorSummary = (doc: Doctor) => {
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const toHospitalWeekday = (date: Date) => date.getDay();
-const formatTime = (time: string) => (time || '').slice(0, 5);
+const formatTime = (time: string) => {
+  if (!time) return '';
+  const [hourStr, minuteStr] = time.split(':');
+  const hour = parseInt(hourStr, 10);
+  const minute = parseInt(minuteStr, 10);
+  if (isNaN(hour) || isNaN(minute)) return time;
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  const minuteFormatted = String(minute).padStart(2, '0');
+  return `${hour12}:${minuteFormatted} ${ampm}`;
+};
 
 const sortSchedules = (schedules: Doctor['schedules']) =>
   [...(schedules || [])].sort((a, b) => {
@@ -460,10 +470,10 @@ export default function DoctorsListClient({ title, subtitle, doctors, fetchError
                       <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent z-10" />
                       {imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={imageUrl} alt={doc.name} className="h-48 w-full object-cover" referrerPolicy="no-referrer" />
+                        <img src={imageUrl} alt={doc.name} className="h-64 w-full object-cover object-top" referrerPolicy="no-referrer" />
                       ) : (
                         <div
-                          className="flex h-48 items-center justify-center text-4xl font-semibold"
+                          className="flex h-64 items-center justify-center text-4xl font-semibold"
                           style={{ backgroundColor: 'var(--hospital-primary-soft)', color: 'var(--hospital-primary-strong)' }}
                         >
                           {doc.name.charAt(0) || '?'}

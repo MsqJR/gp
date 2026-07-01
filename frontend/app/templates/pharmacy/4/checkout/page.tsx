@@ -310,10 +310,10 @@ function TemplateFourCheckoutContent() {
             <label className="text-sm font-medium text-slate-700">
               Zip code
               <input
-                required
                 value={form.zipCode}
                 onChange={(event) => setForm((prev) => ({ ...prev, zipCode: event.target.value }))}
                 className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+                placeholder="Optional"
               />
             </label>
           </div>

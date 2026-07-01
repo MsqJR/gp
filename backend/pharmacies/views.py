@@ -55,11 +55,14 @@ def _maybe_push_to_google_sheet(pharmacy):
     if not pharmacy or not pharmacy.google_sheet_sync_enabled or not pharmacy.google_sheet_url:
         return {'pushed': False, 'reason': 'not_connected'}
 
+    # Always stamp last_pushed_at so the list() sync throttle prevents the next
+    # pull from deleting products that haven't reached the sheet yet.
+    pharmacy.google_sheet_last_pushed_at = timezone.now()
+    pharmacy.save(update_fields=['google_sheet_last_pushed_at', 'updated_at'])
+
     try:
         products = Product.objects.filter(pharmacy=pharmacy).order_by('category', 'name', 'id')
         push_products_to_connected_sheet(pharmacy, products)
-        pharmacy.google_sheet_last_pushed_at = timezone.now()
-        pharmacy.save(update_fields=['google_sheet_last_pushed_at', 'updated_at'])
         return {'pushed': True, 'pushed_at': pharmacy.google_sheet_last_pushed_at}
     except GoogleSheetWriteError as exc:
         logger.warning('Google Sheet push failed for pharmacy %s: %s', pharmacy.id, exc)
@@ -717,6 +720,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         failed_rows,
         *,
         remove_missing: bool = False,
+        synced_before=None,
     ):
         if not products_data and failed_rows:
             failed_count = len(failed_rows)
@@ -797,6 +801,11 @@ class ProductViewSet(viewsets.ModelViewSet):
             for product in Product.objects.filter(pharmacy=pharmacy, website_setup=website_setup):
                 product_key = self._product_row_key(product.name, product.category)
                 if product_key not in synced_keys:
+                    # Protect products added manually after the last sync — they
+                    # haven't been pushed to the sheet yet, so a stale pull must
+                    # not destroy them.
+                    if synced_before and product.created_at and product.created_at > synced_before:
+                        continue
                     product.delete()
                     deleted_count += 1
 
@@ -863,13 +872,17 @@ class ProductViewSet(viewsets.ModelViewSet):
             return {'synced': False, 'error': str(exc)}
 
         products_data, failed_rows = self._parse_csv_content(csv_content)
+
+        # Auto-syncs (background polling and page-load) NEVER delete products.
+        # Deletion with remove_missing=True is only done by explicit endpoints
+        # such as bulk_upload_from_sheet, not by any version of list() sync.
         result = self._apply_product_rows(
             request,
             pharmacy,
             website_setup,
             products_data,
             failed_rows,
-            remove_missing=True,
+            remove_missing=False,
         )
 
         pharmacy.google_sheet_last_synced_at = timezone.now()

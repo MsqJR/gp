@@ -211,47 +211,48 @@ export default function DashboardPage() {
     if (token && detectedType === 'hospital') {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 
         (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8000/api` : 'http://localhost:8000/api')
-      // Fetch subdomain for My Website link
-      fetch(`${API_URL}/website-setups/`, { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          const results = data?.results || data
-          const setup = Array.isArray(results) ? results[0] : results
-          if (setup?.subdomain) setHospitalSubdomain(setup.subdomain)
-        })
-        .catch(() => {})
-      // Check if business info is saved
-      fetch(`${API_URL}/business-info/`, { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (data?.name) {
-            setHasBusinessInfo(true)
-            setHospitalName(data.name)
-          }
-          if (data?.is_published) {
-            setIsPublished(true)
-            setScopedItem('isPublished', 'true')
-          }
-        })
-        .catch(() => {})
-      // Check if hospital features setup is done (profile exists)
-      fetch(`${API_URL}/hospital/admin/profile/profile/`, { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (data?.id) {
-            // Only set selectedFeatures from backend if localStorage doesn't have it
-            // Avoids overwriting the setup form feature flags with raw DB fields
-            const existing = getScopedItem('selectedFeatures')
-            if (!existing) {
-              // Profile exists, but feature flags might not be stored locally on this device.
-              // Keep this as an empty object so the UI doesn't render a confusing placeholder chip.
-              setSelectedFeatures({})
-            } else {
-              setSelectedFeatures(JSON.parse(existing))
+      const headers = { Authorization: `Bearer ${token}` }
+
+      void Promise.all([
+        fetch(`${API_URL}/website-setups/`, { headers })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            const results = data?.results || data
+            const setup = Array.isArray(results) ? results[0] : results
+            if (setup?.subdomain) setHospitalSubdomain(setup.subdomain)
+          })
+          .catch(() => {}),
+        fetch(`${API_URL}/business-info/`, { headers })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data?.name) {
+              setHasBusinessInfo(true)
+              setHospitalName(data.name)
             }
-          }
-        })
-        .catch(() => {})
+            if (data?.is_published) {
+              setIsPublished(true)
+              setScopedItem('isPublished', 'true')
+            }
+          })
+          .catch(() => {}),
+        fetch(`${API_URL}/hospital/admin/profile/profile/`, { headers })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data?.id) {
+              // Only set selectedFeatures from backend if localStorage doesn't have it
+              // Avoids overwriting the setup form feature flags with raw DB fields
+              const existing = getScopedItem('selectedFeatures')
+              if (!existing) {
+                // Profile exists, but feature flags might not be stored locally on this device.
+                // Keep this as an empty object so the UI doesn't render a confusing placeholder chip.
+                setSelectedFeatures({})
+              } else {
+                setSelectedFeatures(JSON.parse(existing))
+              }
+            }
+          })
+          .catch(() => {}),
+      ])
     }
   }, [router])
 

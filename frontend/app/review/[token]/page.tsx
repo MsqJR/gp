@@ -16,7 +16,13 @@ export default async function ReviewPage({ params }: PageProps) {
   const token = resolvedParams.token
 
   // Fetch the review context from the server
-  const response = await reviewApi.getReviewContext(token)
+  let response
+  try {
+    response = await reviewApi.getReviewContext(token)
+  } catch (err) {
+    console.warn('ReviewPage: could not reach backend', err)
+    response = { error: 'Service temporarily unavailable. Please try again later.' }
+  }
 
   if (response.error || !response.data) {
     return (

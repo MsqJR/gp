@@ -3,10 +3,10 @@ from django.utils import timezone
 from hospitals.models import DoctorSchedule, Appointment
 
 
-def get_available_slots(doctor, target_date: date):
+def get_available_slots(doctor, target_date: date, include_all=False):
     """
     Computes available slots dynamically for a given doctor and date.
-    Returns a list of dicts: [{'start_datetime': datetime, 'end_datetime': datetime}]
+    Returns a list of dicts: [{'start_datetime': datetime, 'end_datetime': datetime, 'status': str}]
     """
     # Python weekday: 0=Mon..6=Sun. Model stores: 0=Sun..6=Sat.
     day_of_week = (target_date.weekday() + 1) % 7
@@ -67,11 +67,24 @@ def get_available_slots(doctor, target_date: date):
                     overlap = True
                     break
 
-            if not overlap:
-                available_slots.append({
-                    'start_datetime': slot_start,
-                    'end_datetime': slot_end
-                })
+            # Check if past time on current day
+            is_past = (target_date == timezone.now().date() and slot_start < timezone.now())
+
+            if overlap:
+                status = 'reserved'
+            elif is_past:
+                status = 'unavailable'
+            else:
+                status = 'available'
+
+            slot_data = {
+                'start_datetime': slot_start,
+                'end_datetime': slot_end,
+                'status': status
+            }
+
+            if include_all or status == 'available':
+                available_slots.append(slot_data)
 
             current_time = slot_end
 

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState, useRef } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   FiEdit2,
@@ -17,9 +17,11 @@ import {
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
+import { Modal } from '@/components/ui/Modal'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Textarea } from '@/components/ui/Textarea'
 import { useToast } from '@/components/ui/ToastProvider'
+import { ProductImage } from '@/components/pharmacy/ProductImage'
 import {
   pharmacyProductsApi,
   type BulkUploadFailure,
@@ -29,6 +31,16 @@ import {
 } from '@/lib/pharmacy'
 import { persistProductSnapshot, startPharmacyProductPolling } from '@/lib/pharmacySheetSync'
 import { setPublicSiteItem, setScopedItem } from '@/lib/storage'
+import { FiPackage, FiAlertTriangle } from 'react-icons/fi'
+
+type ConfirmDialog = {
+  open: boolean
+  title: string
+  message: string
+  confirmLabel?: string
+  danger?: boolean
+  onConfirm: () => void
+}
 
 type SheetPreviewRow = {
   name: string
@@ -90,7 +102,6 @@ const getFailureCell = (data: Record<string, string>, aliases: string[]) => {
 export default function PharmacyProductsPage() {
   const router = useRouter()
   const { showToast } = useToast()
-  const formRef = useRef<HTMLDivElement>(null)
 
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -98,6 +109,7 @@ export default function PharmacyProductsPage() {
   const [search, setSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
+  const [showManualProductForm, setShowManualProductForm] = useState(false)
   const [form, setForm] = useState<ProductForm>(emptyForm)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
@@ -112,6 +124,18 @@ export default function PharmacyProductsPage() {
   const [sheetLastPushedAt, setSheetLastPushedAt] = useState<string | null>(null)
   const [sheetWriteConfigured, setSheetWriteConfigured] = useState(false)
   const [serviceAccountEmail, setServiceAccountEmail] = useState<string | null>(null)
+
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog>({
+    open: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  })
+
+  const openConfirm = (opts: Omit<ConfirmDialog, 'open'>) =>
+    setConfirmDialog({ ...opts, open: true })
+  const closeConfirm = () =>
+    setConfirmDialog((prev) => ({ ...prev, open: false }))
 
   const refreshProducts = async (syncFromSheet = false) => {
     const res = await pharmacyProductsApi.list({ sync: syncFromSheet, force: syncFromSheet })
@@ -162,7 +186,7 @@ export default function PharmacyProductsPage() {
     const load = async () => {
       setIsLoading(true)
       await loadSheetSyncStatus()
-      await refreshProducts(true)
+      await refreshProducts(false)
       setIsLoading(false)
     }
 
@@ -213,9 +237,42 @@ export default function PharmacyProductsPage() {
     [products],
   )
 
+  const getProductImage = (product: PharmacyProduct) => {
+    const nextImage = product.image_url || product.image || ''
+    return nextImage.trim()
+  }
+
+  const ProductAvatar = ({ product }: { product: PharmacyProduct }) => {
+    const imageUrl = getProductImage(product)
+
+    return imageUrl ? (
+      <ProductImage
+        src={imageUrl}
+        alt={product.name}
+        className="h-12 w-12 rounded-xl object-cover"
+        fallbackClassName="grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary"
+        fallbackLabel={product.name}
+      />
+    ) : (
+      <div className="grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary" aria-hidden="true">
+        <FiPackage className="text-lg" />
+      </div>
+    )
+  }
+
   const resetForm = () => {
     setForm(emptyForm)
     setFormErrors({})
+  }
+
+  const openManualProductForm = () => {
+    setShowManualProductForm(true)
+  }
+
+  const closeManualProductForm = () => {
+    if (isSaving) return
+    resetForm()
+    setShowManualProductForm(false)
   }
 
   const validateForm = () => {
@@ -266,8 +323,9 @@ export default function PharmacyProductsPage() {
         throw new Error(response.error)
       }
 
-      await refreshProducts(true)
+      await refreshProducts(false)
       resetForm()
+      setShowManualProductForm(false)
       showToast({
         type: 'success',
         title: form.id ? 'Product updated' : 'Product created',
@@ -293,21 +351,25 @@ export default function PharmacyProductsPage() {
       imagePreview: product.image_url_resolved || '',
       image_url: product.image_url || '',
     })
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setShowManualProductForm(true)
   }
 
-  const handleDelete = async (product: PharmacyProduct) => {
-    const confirmed = window.confirm(`Delete ${product.name}?`)
-    if (!confirmed) return
-
-    const res = await pharmacyProductsApi.remove(product.id)
-    if (res.error) {
-      showToast({ type: 'error', title: 'Delete failed', message: res.error })
-      return
-    }
-
-    await refreshProducts(true)
-    showToast({ type: 'success', title: 'Product deleted', message: `${product.name} was removed.` })
+  const handleDelete = (product: PharmacyProduct) => {
+    openConfirm({
+      title: 'Delete Product',
+      message: `Are you sure you want to delete "${product.name}"? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        const res = await pharmacyProductsApi.remove(product.id)
+        if (res.error) {
+          showToast({ type: 'error', title: 'Delete failed', message: res.error })
+          return
+        }
+        await refreshProducts(false)
+        showToast({ type: 'success', title: 'Product deleted', message: `${product.name} was removed.` })
+      },
+    })
   }
 
   const handleLoadSheetPreview = async () => {
@@ -401,50 +463,104 @@ export default function PharmacyProductsPage() {
     }
   }
 
-  const handleDisconnectSheet = async () => {
-    const confirmed = window.confirm('Disconnect live Google Sheet sync? Products already synced will remain in Medify.')
-    if (!confirmed) return
-
-    setIsSheetLoading(true)
-    try {
-      const response = await pharmacyProductsApi.disconnectGoogleSheet()
-      if (response.error) {
-        throw new Error(response.error)
-      }
-
-      setSheetSyncEnabled(false)
-      setSheetLastSyncedAt(null)
-      showToast({
-        type: 'success',
-        title: 'Live sync disconnected',
-        message: 'Google Sheet is no longer syncing automatically.',
-      })
-    } catch (error) {
-      const errorText = error instanceof Error ? error.message : 'Could not disconnect live sync.'
-      showToast({ type: 'error', title: 'Disconnect failed', message: errorText })
-    } finally {
-      setIsSheetLoading(false)
-    }
+  const handleDisconnectSheet = () => {
+    openConfirm({
+      title: 'Disconnect Google Sheet',
+      message: 'Disconnect live Google Sheet sync? Products already synced will remain in Medify.',
+      confirmLabel: 'Disconnect',
+      danger: true,
+      onConfirm: async () => {
+        setIsSheetLoading(true)
+        try {
+          const response = await pharmacyProductsApi.disconnectGoogleSheet()
+          if (response.error) throw new Error(response.error)
+          setSheetSyncEnabled(false)
+          setSheetLastSyncedAt(null)
+          showToast({ type: 'success', title: 'Live sync disconnected', message: 'Google Sheet is no longer syncing automatically.' })
+        } catch (error) {
+          const errorText = error instanceof Error ? error.message : 'Could not disconnect live sync.'
+          showToast({ type: 'error', title: 'Disconnect failed', message: errorText })
+        } finally {
+          setIsSheetLoading(false)
+        }
+      },
+    })
   }
 
-  const handleDeleteAll = async () => {
-    const confirmed = window.confirm('Delete all products from your catalog? This cannot be undone.')
-    if (!confirmed) return
-
-    const response = await pharmacyProductsApi.deleteAll()
-    if (response.error) {
-      showToast({ type: 'error', title: 'Delete all failed', message: response.error })
-      return
-    }
-
-    setProducts([])
-    setScopedItem('pharmacySetup', JSON.stringify({ products: [] }))
-    setPublicSiteItem('pharmacySetup', JSON.stringify({ products: [] }))
-    showToast({ type: 'success', title: 'Catalog cleared', message: 'All pharmacy products were deleted.' })
+  const handleDeleteAll = () => {
+    openConfirm({
+      title: 'Clear Entire Catalog',
+      message: 'Delete ALL products from your catalog? This cannot be undone.',
+      confirmLabel: 'Delete All',
+      danger: true,
+      onConfirm: async () => {
+        const response = await pharmacyProductsApi.deleteAll()
+        if (response.error) {
+          showToast({ type: 'error', title: 'Delete all failed', message: response.error })
+          return
+        }
+        setProducts([])
+        setScopedItem('pharmacySetup', JSON.stringify({ products: [] }))
+        setPublicSiteItem('pharmacySetup', JSON.stringify({ products: [] }))
+        showToast({ type: 'success', title: 'Catalog cleared', message: 'All pharmacy products were deleted.' })
+      },
+    })
   }
+
+  /* ── Custom confirm dialog component ─────────────────────────────────── */
+  const ConfirmDialogUI = confirmDialog.open ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={closeConfirm}
+      />
+      {/* Modal card */}
+      <div className="relative w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-neutral-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        {/* Top accent bar */}
+        <div className={`h-1 w-full ${confirmDialog.danger ? 'bg-gradient-to-r from-red-400 to-rose-500' : 'bg-gradient-to-r from-primary to-primary/70'}`} />
+
+        <div className="p-6">
+          {/* Icon + title */}
+          <div className="flex items-start gap-4">
+            <div className={`flex-shrink-0 flex h-11 w-11 items-center justify-center rounded-full ${
+              confirmDialog.danger ? 'bg-red-50 text-red-500' : 'bg-primary-light text-primary'
+            }`}>
+              <FiAlertTriangle size={22} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base font-semibold text-neutral-dark leading-tight">{confirmDialog.title}</h3>
+              <p className="mt-1.5 text-sm text-neutral-gray leading-relaxed">{confirmDialog.message}</p>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="mt-6 flex gap-3 justify-end">
+            <button
+              onClick={closeConfirm}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-neutral-600 bg-neutral-100 hover:bg-neutral-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => { closeConfirm(); confirmDialog.onConfirm() }}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all ${
+                confirmDialog.danger
+                  ? 'bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 shadow-sm shadow-red-200'
+                  : 'bg-gradient-to-r from-primary to-primary/80 hover:opacity-90'
+              }`}
+            >
+              {confirmDialog.confirmLabel || 'Confirm'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null
 
   return (
     <div className="space-y-6">
+      {ConfirmDialogUI}
       <section className="overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-primary-light via-white to-neutral-light p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -656,103 +772,18 @@ export default function PharmacyProductsPage() {
         ) : null}
       </Card>
 
-      <div ref={formRef} style={{ scrollMarginTop: '24px' }}>
-        <Card className="p-6">
-        <h2 className="text-xl font-semibold text-neutral-dark">Manual Product Add</h2>
-        <form onSubmit={handleSubmitProduct} className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Input
-            label="Name"
-            value={form.name}
-            error={formErrors.name}
-            onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-            placeholder="Vitamin C 1000mg"
-          />
-          <Input
-            label="Category"
-            value={form.category}
-            error={formErrors.category}
-            onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
-            placeholder="Vitamins"
-          />
-          <Input
-            label="Price"
-            value={form.price}
-            error={formErrors.price}
-            onChange={(event) => {
-              const val = event.target.value
-              if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                setForm((prev) => ({ ...prev, price: val }))
-              }
-            }}
-            placeholder="19.99"
-            inputMode="decimal"
-          />
-          <Input
-            label="Stock"
-            value={form.stock}
-            error={formErrors.stock}
-            onChange={(event) => setForm((prev) => ({ ...prev, stock: event.target.value.replace(/\D/g, '') }))}
-            placeholder="25"
-            inputMode="numeric"
-          />
-          <div className="md:col-span-2">
-            <Textarea
-              label="Description"
-              value={form.description}
-              onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-              placeholder="Short description for website cards."
-              rows={3}
-            />
-          </div>
-          <label className="text-sm font-medium text-neutral-dark">
-            Product image (optional)
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => {
-                const file = event.target.files?.[0] || null
-                setForm((prev) => ({
-                  ...prev,
-                  image: file,
-                  imagePreview: file ? URL.createObjectURL(file) : prev.imagePreview,
-                }))
-              }}
-              className="input-field mt-2"
-            />
-          </label>
-
-          {form.imagePreview ? (
-            <div className="md:col-span-2 flex items-center gap-3 rounded-lg border border-neutral-border p-3">
-              <img src={form.imagePreview} alt="Product preview" className="h-14 w-14 rounded-md object-cover" />
-              <button
-                type="button"
-                onClick={() => setForm((prev) => ({ ...prev, image: null, imagePreview: '', image_url: '' }))}
-                className="inline-flex items-center gap-1 text-sm text-error"
-              >
-                <FiX />
-                Remove image
-              </button>
-            </div>
-          ) : null}
-
-          <div className="md:col-span-2 flex justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={resetForm}>
-              Reset
-            </Button>
-            <Button type="submit" disabled={isSaving}>
-              {form.id ? <FiEdit2 className="mr-2" /> : <FiPlus className="mr-2" />}
-              {isSaving ? 'Saving...' : form.id ? 'Update Product' : 'Add Product'}
-            </Button>
-          </div>
-        </form>
-      </Card>
-      </div>
-
       <Card className="p-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <h2 className="text-xl font-semibold text-neutral-dark">Product List</h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[220px]">
+          <div>
+            <h2 className="text-xl font-semibold text-neutral-dark">Product List</h2>
+            <p className="mt-1 text-sm text-neutral-gray">Browse and manage your catalog with image previews, stock status, and quick actions.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            <Button type="button" onClick={openManualProductForm}>
+              <FiPlus className="mr-2" />
+              Add Product
+            </Button>
+            <div className="relative min-w-[220px] lg:min-w-[260px]">
               <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-gray" />
               <input
                 value={search}
@@ -795,115 +826,241 @@ export default function PharmacyProductsPage() {
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="mt-4 space-y-2">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-        ) : filteredProducts.length === 0 ? (
-          <div className="mt-6 rounded-xl border border-dashed border-neutral-border p-10 text-center">
-            <h3 className="text-lg font-semibold text-neutral-dark">No products yet</h3>
-            <p className="mt-1 text-sm text-neutral-gray">Connect your Google Sheet or add products manually to build your catalog.</p>
-          </div>
-        ) : viewMode === 'table' ? (
-          <div className="mt-4 overflow-x-auto rounded-lg border border-neutral-border">
-            <table className="min-w-full text-sm">
-              <thead className="bg-neutral-light text-left text-neutral-gray">
-                <tr>
-                  <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2">Category</th>
-                  <th className="px-3 py-2">Price</th>
-                  <th className="px-3 py-2">Stock</th>
-                  <th className="px-3 py-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProducts.map((product) => (
-                  <tr key={product.id} className="border-t border-neutral-border">
-                    <td className="px-3 py-2 font-medium text-neutral-dark">{product.name}</td>
-                    <td className="px-3 py-2">{product.category}</td>
-                    <td className="px-3 py-2">${priceLabel(product.price)}</td>
-                    <td className="px-3 py-2">
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        product.stock <= 0
-                          ? 'bg-red-100 text-red-700'
-                          : product.stock <= 4
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-emerald-100 text-emerald-700'
-                      }`}>
-                        {product.stock <= 0 ? 'Out' : product.stock <= 4 ? `Low (${product.stock})` : product.stock}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(product)}
-                          className="rounded-md border border-neutral-border px-2 py-1 text-neutral-dark hover:border-primary hover:text-primary"
-                          aria-label={`Edit ${product.name}`}
-                          title={`Edit ${product.name}`}
-                        >
-                          <FiEdit2 />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(product)}
-                          className="rounded-md border border-neutral-border px-2 py-1 text-error hover:border-error"
-                          aria-label={`Delete ${product.name}`}
-                          title={`Delete ${product.name}`}
-                        >
-                          <FiTrash2 />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredProducts.map((product) => (
-              <div key={product.id} className="rounded-xl border border-neutral-border p-4 transition hover:-translate-y-0.5 hover:shadow-md">
-                {product.image_url_resolved ? (
-                  <img
-                    src={product.image_url_resolved}
-                    alt={product.name}
-                    className="h-36 w-full rounded-lg object-cover"
-                    loading="lazy"
-                  />
-                ) : null}
-                <div className="mt-3">
-                  <div className="font-semibold text-neutral-dark">{product.name}</div>
-                  <div className="text-xs text-neutral-gray">{product.category}</div>
-                  <div className="mt-2 text-sm text-neutral-gray line-clamp-2">{product.description || 'No description.'}</div>
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="font-semibold text-primary">${priceLabel(product.price)}</div>
-                    <div className={`text-xs font-semibold ${
-                      product.stock <= 0
-                        ? 'text-red-600'
-                        : product.stock <= 4
-                        ? 'text-amber-600'
-                        : 'text-emerald-600'
-                    }`}>
-                      {product.stock <= 0 ? 'Out of stock' : product.stock <= 4 ? `Low stock (${product.stock})` : `Stock: ${product.stock}`}
-                    </div>
-                  </div>
-                  <div className="mt-3 flex gap-2">
-                    <Button type="button" variant="secondary" className="flex-1 px-3 py-2" onClick={() => handleEdit(product)}>
-                      Edit
-                    </Button>
-                    <Button type="button" className="flex-1 px-3 py-2 bg-error hover:bg-red-600" onClick={() => handleDelete(product)}>
-                      Delete
-                    </Button>
-                  </div>
+        <div className="mt-5">
+          {isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-neutral-border p-10 text-center">
+              <h3 className="text-lg font-semibold text-neutral-dark">No products yet</h3>
+              <p className="mt-1 text-sm text-neutral-gray">Connect your Google Sheet or add products manually to build your catalog.</p>
+            </div>
+          ) : viewMode === 'table' ? (
+            <div className="rounded-2xl border border-neutral-border bg-white shadow-sm">
+              <div className="overflow-x-auto">
+                <div className="max-h-[460px] overflow-y-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="sticky top-0 z-10 bg-neutral-light text-left text-neutral-gray shadow-[0_1px_0_0_rgba(226,232,240,1)]">
+                      <tr>
+                        <th className="w-16 px-3 py-3">Item</th>
+                        <th className="px-3 py-3">Name</th>
+                        <th className="px-3 py-3">Category</th>
+                        <th className="px-3 py-3">Price</th>
+                        <th className="px-3 py-3">Stock</th>
+                        <th className="px-3 py-3">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-border">
+                      {filteredProducts.map((product) => (
+                        <tr key={product.id} className="transition-colors hover:bg-neutral-light/60">
+                          <td className="px-3 py-3 align-middle">
+                            <ProductAvatar product={product} />
+                          </td>
+                          <td className="px-3 py-3 align-middle">
+                            <div className="font-semibold text-neutral-dark">{product.name}</div>
+                            {product.description ? (
+                              <p className="mt-1 line-clamp-1 text-xs text-neutral-gray">{product.description}</p>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-3 align-middle">{product.category}</td>
+                          <td className="px-3 py-3 align-middle">${priceLabel(product.price)}</td>
+                          <td className="px-3 py-3 align-middle">
+                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              product.stock <= 0
+                                ? 'bg-red-100 text-red-700'
+                                : product.stock <= 4
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-emerald-100 text-emerald-700'
+                            }`}>
+                              {product.stock <= 0 ? 'Out' : product.stock <= 4 ? `Low (${product.stock})` : product.stock}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 align-middle">
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleEdit(product)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-neutral-border text-neutral-dark transition-colors hover:border-primary hover:text-primary"
+                                aria-label={`Edit ${product.name}`}
+                                title={`Edit ${product.name}`}
+                              >
+                                <FiEdit2 />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(product)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-neutral-border text-error transition-colors hover:border-error"
+                                aria-label={`Delete ${product.name}`}
+                                title={`Delete ${product.name}`}
+                              >
+                                <FiTrash2 />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {filteredProducts.map((product) => (
+                <div key={product.id} className="rounded-xl border border-neutral-border p-4 transition hover:-translate-y-0.5 hover:shadow-md">
+                  {product.image_url_resolved ? (
+                    <img
+                      src={product.image_url_resolved}
+                      alt={product.name}
+                      className="h-36 w-full rounded-lg object-cover"
+                      loading="lazy"
+                    />
+                  ) : null}
+                  <div className="mt-3">
+                    <div className="font-semibold text-neutral-dark">{product.name}</div>
+                    <div className="text-xs text-neutral-gray">{product.category}</div>
+                    <div className="mt-2 text-sm text-neutral-gray line-clamp-2">{product.description || 'No description.'}</div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="font-semibold text-primary">${priceLabel(product.price)}</div>
+                      <div className={`text-xs font-semibold ${
+                        product.stock <= 0
+                          ? 'text-red-600'
+                          : product.stock <= 4
+                          ? 'text-amber-600'
+                          : 'text-emerald-600'
+                      }`}>
+                        {product.stock <= 0 ? 'Out of stock' : product.stock <= 4 ? `Low stock (${product.stock})` : `Stock: ${product.stock}`}
+                      </div>
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <Button type="button" variant="secondary" className="flex-1 px-3 py-2" onClick={() => handleEdit(product)}>
+                        Edit
+                      </Button>
+                      <Button type="button" className="flex-1 px-3 py-2 bg-error hover:bg-red-600" onClick={() => handleDelete(product)}>
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </Card>
+
+      <Modal
+        isOpen={showManualProductForm || Boolean(form.id)}
+        onClose={closeManualProductForm}
+        title={form.id ? 'Edit Product' : 'Manual Product Add'}
+        size="xl"
+      >
+        <div className="flex flex-col gap-2 border-b border-neutral-border pb-4 sm:flex-row sm:items-start sm:justify-between">
+          <p className="text-sm text-neutral-gray">
+            {form.id
+              ? 'Update the product details and save your changes.'
+              : 'Add a new product manually without using a sheet.'}
+          </p>
+          {!form.id ? (
+            <button
+              type="button"
+              onClick={closeManualProductForm}
+              className="text-sm font-medium text-neutral-gray hover:text-neutral-dark"
+            >
+              Close
+            </button>
+          ) : null}
+        </div>
+
+        <form onSubmit={handleSubmitProduct} className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+          <Input
+            label="Name"
+            value={form.name}
+            error={formErrors.name}
+            onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+            placeholder="Vitamin C 1000mg"
+          />
+          <Input
+            label="Category"
+            value={form.category}
+            error={formErrors.category}
+            onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
+            placeholder="Vitamins"
+          />
+          <Input
+            label="Price"
+            value={form.price}
+            error={formErrors.price}
+            onChange={(event) => {
+              const val = event.target.value
+              if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                setForm((prev) => ({ ...prev, price: val }))
+              }
+            }}
+            placeholder="19.99"
+            inputMode="decimal"
+          />
+          <Input
+            label="Stock"
+            value={form.stock}
+            error={formErrors.stock}
+            onChange={(event) => setForm((prev) => ({ ...prev, stock: event.target.value.replace(/\D/g, '') }))}
+            placeholder="25"
+            inputMode="numeric"
+          />
+          <div className="md:col-span-2 xl:col-span-1 2xl:col-span-2">
+            <Textarea
+              label="Description"
+              value={form.description}
+              onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+              placeholder="Short description for website cards."
+              rows={3}
+            />
+          </div>
+          <label className="text-sm font-medium text-neutral-dark md:col-span-2 xl:col-span-1 2xl:col-span-2">
+            Product image (optional)
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => {
+                const file = event.target.files?.[0] || null
+                setForm((prev) => ({
+                  ...prev,
+                  image: file,
+                  imagePreview: file ? URL.createObjectURL(file) : prev.imagePreview,
+                }))
+              }}
+              className="input-field mt-2"
+            />
+          </label>
+
+          {form.imagePreview ? (
+            <div className="md:col-span-2 xl:col-span-1 2xl:col-span-2 flex items-center gap-3 rounded-lg border border-neutral-border p-3">
+              <img src={form.imagePreview} alt="Product preview" className="h-14 w-14 rounded-md object-cover" />
+              <button
+                type="button"
+                onClick={() => setForm((prev) => ({ ...prev, image: null, imagePreview: '', image_url: '' }))}
+                className="inline-flex items-center gap-1 text-sm text-error"
+              >
+                <FiX />
+                Remove image
+              </button>
+            </div>
+          ) : null}
+
+          <div className="md:col-span-2 xl:col-span-1 2xl:col-span-2 flex justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={closeManualProductForm}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSaving}>
+              {form.id ? <FiEdit2 className="mr-2" /> : <FiPlus className="mr-2" />}
+              {isSaving ? 'Saving...' : form.id ? 'Update Product' : 'Add Product'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

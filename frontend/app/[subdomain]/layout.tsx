@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import HospitalChatWidget from '@/components/hospital/HospitalChatWidget';
-import { getHospitalBusinessInfo, getHospitalProfile, getHospitalDepartments } from '@/lib/hospitalApi';
+import { getHospitalProfile, getHospitalDepartments } from '@/lib/hospitalApi';
 import { getSubdomainPublicInfo } from '@/lib/subdomainApi';
 import { normalizeLogoUrl } from '@/lib/storage';
 
@@ -12,22 +12,23 @@ interface LayoutProps {
 
 export default async function HospitalLayout({ children, params }: LayoutProps) {
     const resolvedParams = await params;
-    
-    // Check business type to avoid rendering hospital UI for pharmacies
-    const subdomainInfo = await getSubdomainPublicInfo(resolvedParams.subdomain);
+    const subdomain = resolvedParams.subdomain;
+
+    // Check business type before doing the heavier hospital-only work.
+    const subdomainInfoPromise = getSubdomainPublicInfo(subdomain);
+    const profilePromise = getHospitalProfile(subdomain);
+    const departmentsPromise = getHospitalDepartments(subdomain).catch(() => []);
+
+    const subdomainInfo = await subdomainInfoPromise;
     if (subdomainInfo?.business_type === 'pharmacy') {
         return <>{children}</>;
     }
-    
-    const profile = await getHospitalProfile(resolvedParams.subdomain);
-    const businessInfo = await getHospitalBusinessInfo(resolvedParams.subdomain);
-    
-    let departments: any[] = [];
-    try {
-        departments = await getHospitalDepartments(resolvedParams.subdomain);
-    } catch {
-        departments = [];
-    }
+
+    const [profile, departments] = await Promise.all([
+        profilePromise,
+        departmentsPromise,
+    ]);
+    const businessInfo = profile?.business_info || null;
     
     const theme = profile?.theme_settings || {};
     const primaryColor = theme.primaryColor || '#2563eb';
@@ -265,7 +266,7 @@ export default async function HospitalLayout({ children, params }: LayoutProps) 
                         <nav className="hidden items-center gap-7 text-sm font-medium text-slate-600 md:flex">
                             <Link href="/" className="hover:text-slate-900">Home</Link>
                             <Link
-                                href={departments && departments.length > 0 ? `/departments/${departments[0].id}` : '/#departments'}
+                                href="/departments"
                                 className="hover:text-slate-900"
                             >
                                 Departments
@@ -300,7 +301,7 @@ export default async function HospitalLayout({ children, params }: LayoutProps) 
                             <div className="mt-3 space-y-2 text-sm text-slate-400">
                                 <p><Link href="/">Home</Link></p>
                                 <p>
-                                    <Link href={departments && departments.length > 0 ? `/departments/${departments[0].id}` : '/#departments'}>
+                                    <Link href="/departments">
                                         Departments
                                     </Link>
                                 </p>

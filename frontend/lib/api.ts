@@ -197,7 +197,7 @@ export const apiRequest = async <T>(
 
     return { data, status: response.status }
   } catch (error) {
-    console.error('API request error:', error)
+    console.warn('API request error:', error)
     return {
       error: 'Network error. Please check your connection.',
       status: 0,

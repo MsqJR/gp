@@ -32,9 +32,10 @@ if __name__ == '__main__':
     appointment.status = Appointment.Status.CONFIRMED
     appointment.save()
 
-    # Verify that the review email was sent immediately
+    # Verify that the review email and confirmation email were sent immediately
     appointment.refresh_from_db()
     print(f"review_email_sent is: {appointment.review_email_sent} (Should be True)")
+    print(f"confirmation_email_sent is: {appointment.confirmation_email_sent} (Should be True)")
 
     print("Running send_review_emails (Should skip due to review_email_sent)...")
     send_review_emails()

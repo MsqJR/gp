@@ -155,3 +155,53 @@ class HospitalModuleTests(TestCase):
 
         res2 = client2.post(url, payload2, format='json')
         self.assertEqual(res2.status_code, 409)
+
+    def test_appointment_confirmation_email(self):
+        from core.models import BusinessInfo
+        from django.core import mail
+        
+        # Create BusinessInfo
+        BusinessInfo.objects.create(
+            website_setup=self.website_setup,
+            name='Test Hospital Corp'
+        )
+        
+        # Create an appointment with PENDING status
+        start_dt = timezone.make_aware(datetime.datetime.combine(self.test_date, datetime.time(10, 0)))
+        end_dt = timezone.make_aware(datetime.datetime.combine(self.test_date, datetime.time(10, 30)))
+        
+        appointment = Appointment.objects.create(
+            website_setup=self.website_setup,
+            doctor=self.doctor,
+            patient_name='John Patient',
+            patient_email='johnpatient@example.com',
+            patient_phone='1234567890',
+            start_datetime=start_dt,
+            end_datetime=end_dt,
+            status=Appointment.Status.PENDING
+        )
+        
+        # Clear outbox
+        mail.outbox = []
+        
+        # Change status to CONFIRMED and execute on_commit callbacks
+        with self.captureOnCommitCallbacks(execute=True):
+            appointment.status = Appointment.Status.CONFIRMED
+            appointment.save()
+        
+        # Verify confirmation_email_sent is True
+        appointment.refresh_from_db()
+        self.assertTrue(appointment.confirmation_email_sent)
+        
+        # Verify email was sent
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertEqual(email.to, ['johnpatient@example.com'])
+        self.assertIn('Appointment Confirmed - Test Hospital Corp', email.subject)
+        self.assertIn('Dear John Patient', email.body)
+        self.assertIn(f'Reservation ID: {appointment.id}', email.body)
+        self.assertIn('Doctor: Dr. Smith', email.body)
+        self.assertNotIn('Dr. Dr. Smith', email.body)
+        self.assertIn('Department: Cardiology', email.body)
+        self.assertIn('Date: 2025-01-06', email.body)
+        self.assertIn('Time: 10:00 AM', email.body)

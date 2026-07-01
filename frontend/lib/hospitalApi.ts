@@ -113,7 +113,7 @@ export async function getHospitalDepartments(subdomain: string): Promise<Departm
 }
 
 export async function getAvailableSlots(doctorId: string, date: string): Promise<AvailableSlotsResponse> {
-    const res = await fetch(`${API_BASE_URL}/hospital/booking/available_slots/?doctor_id=${encodeURIComponent(doctorId)}&date=${encodeURIComponent(date)}`, {
+    const res = await fetch(`${API_BASE_URL}/hospital/booking/available_slots/?doctor_id=${encodeURIComponent(doctorId)}&date=${encodeURIComponent(date)}&include_all=true`, {
         cache: 'no-store'
     });
     if (!res.ok) {

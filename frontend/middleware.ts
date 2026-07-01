@@ -16,6 +16,19 @@ export const config = {
 
 export default function middleware(req: NextRequest) {
     const url = req.nextUrl;
+    const path = url.pathname;
+
+    if (
+        path.startsWith('/dashboard') ||
+        path.startsWith('/login') ||
+        path.startsWith('/signup') ||
+        path.startsWith('/templates') ||
+        path.startsWith('/forgot-password') ||
+        path.startsWith('/reset-password') ||
+        path.startsWith('/review')
+    ) {
+        return NextResponse.next();
+    }
 
     // Get hostname from request
     const hostname = req.headers.get('host') || 'localhost:3000';
@@ -38,9 +51,6 @@ export default function middleware(req: NextRequest) {
         return NextResponse.next();
     }
 
-    // Exclude system paths from subdomain rewriting
-    const path = url.pathname;
-
     // Redirect template paths to clean paths on subdomains
     if (path.startsWith('/templates/pharmacy/')) {
         const match = path.match(/^\/templates\/pharmacy\/\d+(\/.*)?$/);
@@ -48,18 +58,6 @@ export default function middleware(req: NextRequest) {
             const subpath = match[1] || '/';
             return NextResponse.redirect(new URL(`${subpath}${url.search}`, req.url));
         }
-    }
-
-    if (
-        path.startsWith('/dashboard') ||
-        path.startsWith('/login') ||
-        path.startsWith('/signup') ||
-        path.startsWith('/templates') ||
-        path.startsWith('/forgot-password') ||
-        path.startsWith('/reset-password') ||
-        path.startsWith('/review')
-    ) {
-        return NextResponse.next();
     }
 
     // Rewrite to our dynamic subdomain route

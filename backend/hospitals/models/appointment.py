@@ -40,6 +40,7 @@ class Appointment(models.Model):
     )
 
     review_email_sent = models.BooleanField(default=False)
+    confirmation_email_sent = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -72,6 +73,16 @@ class Appointment(models.Model):
             from hospitals.tasks import send_individual_review_email
             from django.db import transaction
             transaction.on_commit(lambda: send_individual_review_email(self.id))
+
+        # Trigger confirmation email if status is changed to CONFIRMED
+        if (
+            self.status == Appointment.Status.CONFIRMED
+            and (is_new or old_status != Appointment.Status.CONFIRMED)
+            and not self.confirmation_email_sent
+        ):
+            from hospitals.tasks import send_appointment_confirmation_email
+            from django.db import transaction
+            transaction.on_commit(lambda: send_appointment_confirmation_email(self.id))
 
 
 

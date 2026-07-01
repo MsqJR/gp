@@ -74,6 +74,7 @@ export interface Doctor {
 export interface AvailableSlot {
     start_datetime: string;
     end_datetime: string;
+    status?: 'available' | 'reserved' | 'unavailable';
 }
 
 export interface AvailableSlotsResponse {

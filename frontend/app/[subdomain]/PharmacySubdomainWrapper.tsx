@@ -1,10 +1,9 @@
 'use client'
 
 import React, { useEffect, useState, useMemo } from 'react'
-import { notFound, useSearchParams } from 'next/navigation'
 import { SubdomainPublicInfo } from '@/lib/subdomainApi'
-import { setSiteOwnerId, setSiteItem, setPublicSiteItem, getSiteOwnerId } from '@/lib/storage'
-import { pharmacyApi } from '@/lib/pharmacy'
+import { setSiteOwnerId, setSiteItem, setPublicSiteItem } from '@/lib/storage'
+import { pharmacyApi, pharmacyProductsApi } from '@/lib/pharmacy'
 import { getPharmacyThemeCssVariables, normalizePharmacyThemeSettings } from '@/lib/pharmacyTheme'
 
 // Import the layout and templates
@@ -27,24 +26,46 @@ export default function PharmacySubdomainWrapper({ subdomainInfo }: Props) {
     // 1. Set the owner ID immediately so templates know whose data to fetch
     setSiteOwnerId(subdomainInfo.owner_id)
 
-    // 2. Fetch public pharmacy profile to get the theme settings and business info
     const init = async () => {
       try {
+        // 2. Fetch public pharmacy profile for theme settings
         const profileRes = await pharmacyApi.getProfile()
-        // Wait, pharmacyApi.getProfile() uses the token if it exists. But a visitor doesn't have a token.
-        // We might need a public endpoint for the pharmacy profile. 
-        // For now, if getProfile fails, we rely on cached data.
         if (profileRes.data?.theme_settings) {
           setThemeSettings(normalizePharmacyThemeSettings(profileRes.data.theme_settings))
         }
-      } catch (err) {
-        // Ignore errors
-      } finally {
-        setIsInitializing(false)
+      } catch {
+        // Ignore profile errors — theme falls back to defaults
       }
+
+      try {
+        // 3. Fetch products from the public API so ALL visitors see them,
+        //    even without being logged in. Persist to the pharmacySetup key
+        //    so loadTemplateProducts() in every template can find them.
+        const productsRes = await pharmacyProductsApi.listPublic(subdomainInfo.owner_id, false)
+        if (!productsRes.error && productsRes.data?.products) {
+          const snapshot = JSON.stringify({
+            products: productsRes.data.products.map((p) => ({
+              id: p.id,
+              name: p.name,
+              category: p.category,
+              description: p.description,
+              price: p.price,
+              inStock: p.in_stock,
+              stock: p.stock,
+              imageUrl: p.image_url_resolved || p.image_url || '',
+            })),
+          })
+          setSiteItem('pharmacySetup', snapshot)
+          setPublicSiteItem('pharmacySetup', snapshot)
+        }
+      } catch {
+        // Ignore product fetch errors — templates will show cached or empty state
+      }
+
+      setIsInitializing(false)
     }
-    
-    init()
+
+    void init()
   }, [subdomainInfo])
 
   const themeVariables = useMemo(

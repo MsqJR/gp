@@ -77,7 +77,11 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
                     done
                       ? { backgroundColor: 'var(--hospital-btn-primary)', color: 'var(--hospital-btn-primary-text)' }
                       : active
-                        ? { backgroundColor: 'var(--hospital-btn-primary)', color: 'var(--hospital-btn-primary-text)', boxShadow: '0 0 0 4px color-mix(in srgb, var(--hospital-btn-primary) 25%, transparent)' }
+                        ? { 
+                            backgroundColor: 'color-mix(in srgb, var(--hospital-btn-primary) 10%, transparent)', 
+                            color: 'var(--hospital-btn-primary)', 
+                            border: '2px solid var(--hospital-btn-primary)' 
+                          }
                         : { backgroundColor: 'var(--hospital-surface-alt)', color: 'var(--hospital-text-muted)' }
                   }
                 >
@@ -467,6 +471,14 @@ export default function BookingFormBlock({ settings, subdomain }: BookingFormBlo
         setErrorMsg(result.error);
         if (result.status === 409) await fetchSlots();
       } else {
+        // Immediately mark the booked slot as reserved in our local state to reflect it without reload
+        setSlots(prevSlots => 
+          prevSlots.map(s => 
+            s.start_datetime === selectedSlot.start_datetime 
+              ? { ...s, status: 'reserved' } 
+              : s
+          )
+        );
         setIsSuccess(true);
       }
     } catch { setErrorMsg('An unexpected error occurred. Please try again.'); }
@@ -703,7 +715,7 @@ export default function BookingFormBlock({ settings, subdomain }: BookingFormBlo
                 )}
 
                 {isLoadingSlots ? (
-                  <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {[...Array(8)].map((_, i) => (
                       <div key={i} className="h-12 animate-pulse rounded-xl" style={{ backgroundColor: 'var(--hospital-surface-alt)' }} />
                     ))}
@@ -723,46 +735,97 @@ export default function BookingFormBlock({ settings, subdomain }: BookingFormBlo
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-3 gap-1 max-h-60 overflow-y-auto overflow-x-hidden sm:grid-cols-4">
-                    {slots.map((slot, idx) => {
-                      const isSelected = selectedSlot?.start_datetime === slot.start_datetime;
-                      return (
-                        <div key={idx} className="p-1">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedSlot(slot)}
-                            className="w-full rounded-xl py-3 text-sm font-semibold transition-all"
-                            style={
-                              isSelected
-                                ? { backgroundColor: 'var(--hospital-btn-primary)', color: 'var(--hospital-btn-primary-text)', transform: 'scale(1.05)' }
-                                : { border: '1px solid var(--hospital-border)', backgroundColor: 'var(--hospital-surface)', color: 'var(--hospital-text)' }
-                            }
-                          >
-                            {formatTime(slot.start_datetime)}
-                          </button>
-                        </div>
-                      );
-                    })}
+                  <div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 max-h-80 overflow-y-auto pr-1">
+                      {slots.map((slot, idx) => {
+                        const isSelected = selectedSlot?.start_datetime === slot.start_datetime;
+                        const isReserved = slot.status === 'reserved' || slot.status === 'unavailable';
+                        return (
+                          <div key={idx}>
+                            <button
+                              type="button"
+                              disabled={isReserved}
+                              onClick={() => setSelectedSlot(slot)}
+                              className="w-full rounded-xl py-3.5 text-sm font-bold transition-all relative overflow-hidden"
+                              style={
+                                isReserved
+                                  ? {
+                                      border: '1px solid var(--hospital-border)',
+                                      backgroundColor: 'var(--hospital-surface)',
+                                      color: 'var(--hospital-text-muted)',
+                                      cursor: 'not-allowed',
+                                      opacity: 0.6,
+                                      background: 'linear-gradient(to top right, transparent calc(50% - 1px), var(--hospital-border) calc(50% - 1px), var(--hospital-border) calc(50% + 1px), transparent calc(50% + 1px))',
+                                      textDecoration: 'line-through'
+                                    }
+                                  : isSelected
+                                    ? {
+                                        backgroundColor: 'var(--hospital-btn-primary)',
+                                        color: 'var(--hospital-btn-primary-text)',
+                                        border: '1px solid var(--hospital-btn-primary)',
+                                        transform: 'scale(1.02)',
+                                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)'
+                                      }
+                                    : {
+                                        border: '1px solid var(--hospital-btn-primary)',
+                                        backgroundColor: 'white',
+                                        color: 'var(--hospital-text)',
+                                      }
+                              }
+                            >
+                              {formatTime(slot.start_datetime)}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Mockup Legend */}
+                    <div className="mt-5 flex flex-wrap items-center gap-5 text-xs font-semibold" style={{ color: 'var(--hospital-text-muted)' }}>
+                      <div className="flex items-center gap-2">
+                        <div className="h-5 w-8 rounded border border-neutral-300 bg-white" style={{ borderColor: 'var(--hospital-btn-primary)' }} />
+                        <span>Available</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-5 w-8 rounded border border-neutral-300"
+                          style={{
+                            borderColor: 'var(--hospital-border)',
+                            background: 'linear-gradient(to top right, transparent calc(50% - 1px), var(--hospital-border) calc(50% - 1px), var(--hospital-border) calc(50% + 1px), transparent calc(50% + 1px))'
+                          }}
+                        />
+                        <span>Reserved</span>
+                      </div>
+                    </div>
                   </div>
                 )}
 
-                <div className="mt-6 flex gap-3">
+                <div className="mt-8 flex items-center gap-4">
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="flex items-center gap-1.5 rounded-full px-5 py-3 text-sm font-semibold transition"
-                    style={{ border: '1px solid var(--hospital-border)', backgroundColor: 'var(--hospital-surface)', color: 'var(--hospital-text)' }}
+                    className="rounded-xl px-6 py-3.5 text-sm font-bold border transition hover:bg-neutral-50 shrink-0"
+                    style={{
+                      borderColor: 'var(--hospital-border)',
+                      backgroundColor: 'var(--hospital-surface)',
+                      color: 'var(--hospital-text)',
+                      borderRadius: 'var(--hospital-radius)'
+                    }}
                   >
-                    <FiChevronLeft size={15} /> Back
+                    &lt; Back
                   </button>
                   <button
                     type="button"
                     disabled={!selectedSlot}
                     onClick={() => setStep(3)}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-full py-3 text-sm font-bold transition disabled:opacity-40"
-                    style={{ backgroundColor: 'var(--hospital-btn-primary)', color: 'var(--hospital-btn-primary-text)', borderRadius: 'var(--hospital-radius)' }}
+                    className="flex-1 rounded-xl py-3.5 text-sm font-bold text-white transition hover:opacity-95 disabled:opacity-40"
+                    style={{
+                      backgroundColor: 'var(--hospital-btn-primary)',
+                      color: 'var(--hospital-btn-primary-text)',
+                      borderRadius: 'var(--hospital-radius)'
+                    }}
                   >
-                    Continue <FiArrowRight size={15} />
+                    Continue &rarr;
                   </button>
                 </div>
               </div>

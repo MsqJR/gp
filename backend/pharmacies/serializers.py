@@ -297,8 +297,6 @@ class PharmacyOrderCreateSerializer(serializers.Serializer):
                 missing.append('city')
             if not state:
                 missing.append('state')
-            if not zip_code:
-                missing.append('zip_code')
             if missing:
                 raise serializers.ValidationError({
                     'delivery_details': f"Delivery orders require: {', '.join(missing)}"
